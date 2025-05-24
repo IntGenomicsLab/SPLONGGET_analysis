@@ -9,7 +9,7 @@ file list and description
 - `03_pycistopic.ipynb` - running pycistopic up to topic modelling  <br>
 - `03a_pycistopic_modelling.slurm` - topic modelling slurm submission file <br>
 - `03b_pycistopic_modelling.py` - topic modelling script <br>
-- `04_pycistopic_post_modelling.ipynb` - analysis post topic modelling <>br
+- `04_pycistopic_post_modelling.ipynb` - analysis post topic modelling <br>
 
 
 The details on environment
