@@ -10,8 +10,12 @@ file list and description
 - `03a_pycistopic_modelling.slurm` - topic modelling slurm submission file <br>
 - `03b_pycistopic_modelling.py` - topic modelling script <br>
 - `04_pycistopic_post_modelling.ipynb` - analysis post topic modelling <br>
+- `05_subset_cistopic.ipynb` - subsetting cistopic object to analysie subset of tumour cells
+- `06_pycistopic_modelling.py` - running cistopic modelling on these cells
+- `06_pycistopic_modelling.slurm` - topic modelling submission file
+- `07_pycistopic_post_modelling.ipynb` - analysis post topic modelling
 
 
 The details on environment
 - `requirements_snapatac2.txt` for `02_fragment_creation.ipynb`
-- `requirements_pycistopic.txt` for `03_pycistopic.ipynb`,`03a_pycistopic_modelling.slurm`,`03b_pycistopic_modelling.py` and `04_pycistopic_post_modelling.ipynb`
+- `requirements_pycistopic.txt` for `03_pycistopic.ipynb`,`03a_pycistopic_modelling.slurm`,`03b_pycistopic_modelling.py`, `04_pycistopic_post_modelling.ipynb`, `05_subset_cistopic.ipynb`,`06_pycistopic_modelling.py`, `06_pycistopic_modelling.slurm`, `07_pycistopic_post_modelling.ipynb`
