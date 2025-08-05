@@ -1,0 +1,255 @@
+# Plotting ASCAT.sc results
+
+Here we will plot the results of `ASCAT.sc`. The data is already processed and saved in the `ASCAT.sc_profiles.rds` file, which contains the bins, profiles, and raw segments.
+
+First we load packages. These need to be preinstalled in your R environment. You can find all packages in the `setup.R` file in the `functions` folder.
+Furthermore, we also load functions that help us with plotting and saving.
+
+```{r set up, warning = FALSE, message = FALSE}
+# Source setup file including all required packages and functions
+source("./functions/setup.R")
+```
+
+### Load the results
+```{r load results, echo = FALSE}
+# Load the ASCAT.sc results
+res = readRDS("./data/ascatsc/ASCAT.sc_profiles.rds")
+```
+
+### Preparing data for initial plotting
+
+Note, this chunk takes a while to run.
+```{r prepare data, echo = FALSE}
+bins = res[[1]]
+profiles = res[[2]]
+
+# Prepare data
+setDT(bins)
+setDT(profiles)
+theme_set(theme_cowplot())
+bins[, `:=`(bin, seq_along(chr))]
+bins[, `:=`(end_cum, cumsum((end - start) + 1))]
+bins[, `:=`(start_cum, c(1, end_cum[seq_along(end_cum) - 1] + 1))]
+chr_bounds = bins[, list(min = min(bin), max = max(bin), chrlen_bp = sum(end - start)), by = chr]
+chr_bounds = chr_bounds %>% mutate(mid = round(min + (max - min) / 2, 0),
+																	 end_bp = cumsum(as.numeric(chrlen_bp)),
+																	 start_bp = end_bp - chrlen_bp,
+																	 mid_bp = round((chrlen_bp / 2) + start_bp, 0))
+
+# Colors for CNAs
+colors = c("#153570", "#577aba", "#c1c1c1", "#e3b55f", "#d6804f", 
+		"#b3402e", "#821010", "#6a0936", "#ab1964", "#b6519f", 
+		"#ad80b9", "#c2a9d1")
+names(colors) = c(as.character(0:10), "10+")
+
+# Plotting dendrogram
+dt = data.table(cbind(bins, profiles))
+hc = hclust(dist(t(dt[, 7:ncol(dt)])), method = "average")
+dhc = as.dendrogram(hc)
+ddata = dendro_data(dhc, type = "rectangle")
+dendro = ggplot(ggdendro::segment(ddata)) + 
+	geom_segment(aes(x = x, y = y, xend = xend, yend = yend)) + 
+	coord_flip() + 
+	scale_y_reverse(expand = c(0, 0)) + 
+	scale_x_continuous(expand = c(0.004, 0.004)) +
+	theme_dendro()
+
+# Preparing heatmap structure
+dt_melt = melt(dt, id.vars = c("chr", "start", "end", "bin", "start_cum", "end_cum"))
+dt_melt[, `:=`(value, factor(value))]
+dt_melt[as.numeric(value) > 10, `:=`(value, "10+")]
+dt_melt[, `:=`(value, factor(value, levels = c(as.character(0:10), "10+")))]
+dt_melt[, `:=`(variable, factor(variable, levels = ddata$labels$label))]
+```
+
+Now we plot the heatmap to visually see the quality of the data. While we can plot this with the function `plotHeatmap()`. We need some intermediary files so we do this manually here.
+
+```{r plot heatmap, echo = FALSE, fig.width = 10, fig.height = 6}
+# Heatmap plotting
+ggplot(dt_melt) + 
+	geom_linerange(aes(ymin = start_cum, 
+										 ymax = end_cum,
+										 x = variable,
+										 color = value), linewidth = .5) + 
+	coord_flip() + 
+	scale_color_manual(values = colors, drop = FALSE) + 
+	labs(color = "Copy Number") + 
+	scale_y_continuous(expand = c(0, 0), labels = chr_bounds$chr, breaks = chr_bounds$mid_bp) + 
+	geom_hline(data = chr_bounds, aes(yintercept = end_bp), 
+			linetype = 1, linewidth = 0.8) + 
+	theme(axis.text.y = element_blank(), axis.ticks.y = element_blank(), 
+					axis.ticks.x = element_blank(), axis.title = element_blank())
+```
+
+Due to the extreme low coverage of this data, typical methods for single-cell copy number filtering (MAD, number of reads, etc) do not work well.
+Therefore, we will use a manual filtering approach based on the number of segments and the total copy number. 
+
+We use the dendrogram data to only keep cells that are in the bottom 3800 cells of the dendrogram. This is a heuristic approach to filter out cells that are likely to have poor quality profiles.
+
+```{r filter profiles, echo = FALSE}
+# Subset
+dt_subset = dt_melt[variable %in% tail(ddata$labels$label, 3800)]
+```
+
+### Re-ordering samples
+
+Now we remove potential doublets from the dataset. These doublets are previously identified by using cDNA UMI and DNA read cut offs (20k and 60k, respectively). Then we will reorder samples to get within-timepoint clustering
+
+```{r remove doublets, echo = FALSE}
+# Load doublet file
+doublets = fread("./data/barcode_doublet.tsv")
+
+# Load in barcode matching
+dna_barcodes = fread("./data/cellranger_arc_atac.737K-arc-v1.txt.gz", header = FALSE)
+rna_barcodes = fread("./data/cellranger_arc_rna.737K-arc-v1.txt.gz", header = FALSE)
+matched_barcodes = cbind(dna_barcodes, rna_barcodes)
+setnames(matched_barcodes, c("atac_barcode", "cDNA_barcode"))
+
+# Match barcodes
+doublets[, barcode := gsub("-.*", "", V1)]
+doublets[, timepoint := gsub(".*-", "", V1)]
+doublets = merge(doublets, matched_barcodes, by.x = "barcode", by.y = "cDNA_barcode", all.x = TRUE)
+doublets[, sample := paste0(atac_barcode, "-", timepoint)]
+
+# Remove doublets
+dt_subset[, timepoint := gsub("\\..*", "", variable)]
+dt_subset[, barcode := gsub(".*_", "", variable)]
+dt_subset[, sample := paste0(barcode, "-",  timepoint)]
+
+dt_subset = dt_subset[sample %in% doublets[doublet_outlier == FALSE, sample]]
+```
+
+First we reorder cells based on the dendrogram clustering within each timepoint.
+```{r reorder samples, echo = FALSE}
+# Make wide
+dt_subset_wide = dcast(dt_subset, chr + start + end + bin + start_cum + end_cum ~ sample, value.var = "value")
+
+# Get annotations
+timepoints = data.table(sample_id = colnames(dt_subset_wide[, 7:ncol(dt_subset_wide)]),
+												timepoint = gsub(".*-", "", colnames(dt_subset_wide[, 7:ncol(dt_subset_wide)])))
+
+#  Cluster samples within timepoints
+sample_orders = pblapply(unique(timepoints$timepoint), function(x) {
+	hc = hclust(dist(t(dt_subset_wide[, timepoints[timepoint == x, sample_id], with = FALSE])), method = "average")
+	dhc = as.dendrogram(hc)
+
+	# Rectangular lines
+	ddata = dendro_data(dhc, type = "rectangle")
+	
+	return(ddata$labels$label)
+}, cl = 4) |> unlist()
+```
+
+
+Now we can plot the filtered cells and include timepoint annotations
+```{r plot filtered heatmap, echo = FALSE, fig.width = 10, fig.height = 6}
+
+sample = rev(sample_orders)
+
+plt = plotHeatmap(dt_subset_wide[, 7:ncol(dt_subset_wide)], dt_subset_wide[, 1:3],
+									order = sample,
+									linesize = 0.8,
+									rasterize = TRUE)
+
+# Plot annotation
+timepoints[, sample_id := factor(sample_id, levels = sample)]
+annot_plt = ggplot(timepoints, aes(x = 1, y = sample_id, fill = timepoint)) +
+	geom_bar(stat = "identity", width = 1) +
+	scale_fill_manual(values = timepoints_cols) +
+	theme_void() +
+	theme(legend.position = "right")
+
+annot_plt + plt + plot_layout(ncol = 2, widths = c(0.05, 2), guides = "collect")
+```
+
+### Plotting individual profiles
+
+We also show two individual profiles. To plot this you can run the following code:
+
+```{r plot individual profiles, echo = FALSE, fig.width = 10, fig.height = 6}
+cells_to_plot = c("Q3.dedup.sorted.bam_GCCAATACACTCAATC", "Q3.dedup.sorted.bam_TTGTGGCTCCCTGGTG") # Replace with your cell IDs
+
+bins = res[[1]]
+segments = res[[2]]
+raw = res[[3]]
+
+plotProfile(segments[[cells_to_plot[1]]], raw[[cells_to_plot[1]]], bins)
+plotProfile(segments[[cells_to_plot[2]]], raw[[cells_to_plot[2]]], bins)
+```
+
+### Isochromosome 7 UMAP
+
+To plot the presence of isochromosome 7 on the UMAP we will first load in the multiome anndata object
+
+```{r load anndata, echo = FALSE}
+multiome = schard::h5ad2seurat("./data/multiome_adata_04072025.h5ad")
+```
+
+First, we will collapse bins to the isochromosome 7 arms. We will do this by melting the data and then reducing the ranges to get the start and end of the arms.
+
+```{r collapse bins, echo = FALSE}
+dt_subset[, alt_start := seq_len(.N), by = .(variable, chr)]
+dt_subset[, alt_end := alt_start + 1]
+
+# Reduce data.table
+setkey(dt_subset, variable, chr, alt_start, alt_end)
+final_short = dt_subset[, as.data.table(GenomicRanges::reduce(IRanges(alt_start, alt_end))), by = .(chr, variable, value)]
+final_short = dcast(final_short, chr + start + end + width ~ variable)
+
+# Fill NAs
+final_short = final_short %>%
+  group_by(chr) %>%
+  fill(names(.), .direction = "updown") %>%
+  ungroup() %>%
+  setDT()
+
+# Merge back with actual start first then with end
+final_short_merged = merge(final_short, unique(dt_subset[, .(chr, start, alt_start)]),
+                           by.x = c("chr", "start"),
+                           by.y = c("chr", "alt_start"))
+
+final_short_merged = merge(final_short_merged, unique(dt_subset[, .(chr, end, alt_end)]),
+                           by.x = c("chr", "end"),
+                           by.y = c("chr", "alt_end"))
+
+final = unique(final_short_merged, by = c("chr", "start.y"))
+final = melt(final, id.vars = c("chr", "start", "end", "start.y", "end.y", "width"))[, .(chr, start.y, end.y, width, variable, value)]
+setnames(final, c("chrom", "start", "end", "width", "sample_id", "total_cn"))
+
+# Make wide
+final_wide = dcast(final, chrom + start + end ~ sample_id, value.var = "total_cn")
+final_wide_chr7 = final_wide[chrom == "chr7"]
+```
+
+Next we extract samples where the P arm has a CN of 1 and the Q arm has a CN of 3. This is indicative of an isochromosome 7.
+
+```{r isochromosome 7 samples, echo = FALSE}
+iso_samples = names(final_wide_chr7)[which(final_wide_chr7[1, 4:ncol(final_wide_chr7), with = FALSE] == 1 & final_wide_chr7[2, 4:ncol(final_wide_chr7), with = FALSE] == 3)]
+iso_dt = data.table(barcode = gsub(".*_", "", iso_samples),
+										timepoint = gsub(".dedup.*", "", iso_samples))
+```
+
+Finally, we plot the results on the gene expression umap
+
+```{r plot isochromosome umap, echo = FALSE, fig.width = 10, fig.height = 6}
+# Merge with matched barcodes
+iso_dt = merge(iso_dt, matched_barcodes, by.x = "barcode", by.y = "atac_barcode", all.x = TRUE)
+iso_dt[, sample := paste0(cDNA_barcode, "-", timepoint)]
+iso_dt[, has_isochromosome := "Yes"]
+
+# Get UMAP
+umap_dt = data.table(multiome@reductions$Xumap_@cell.embeddings)
+umap_dt[, sample := rownames(multiome@reductions$Xumap_@cell.embeddings)]
+
+# Merge
+umap_dt = merge(umap_dt, iso_dt, by = "sample", all.x = TRUE)
+umap_dt[is.na(has_isochromosome), has_isochromosome := "No"]
+umap_dt[, has_isochromosome := factor(has_isochromosome, levels = c("No", "Yes"))]
+
+# Plot UMAP
+ggplot() +
+	geom_point(data = umap_dt[has_isochromosome == "No"], aes(x = Xumap_1, y = Xumap_2), color = "lightgrey", size = .5) +
+	geom_point(data = umap_dt[has_isochromosome == "Yes"], aes(x = Xumap_1, y = Xumap_2), color = "red", size = .8) +
+	labs(x = "UMAP 1", y = "UMAP 2", color = "Cells with isochromosome")
+```
+

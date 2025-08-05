@@ -1,0 +1,96 @@
+# Gene quantification QC
+
+To plot the gene quantification we simply use all metrics calculated in scanpy and load them in R for nicer plotting.
+
+```{r setup, include = FALSE}
+source("./functions/setup.R")
+```
+
+### Load data
+
+```{r load data, echo = FALSE}
+multiome = schard::h5ad2seurat("./data/multiome_adata_04072025.h5ad")
+```
+
+### Prepare data
+
+```{r prepare data, echo = FALSE}
+# Get datatable with mt counts, nUMI, nGene
+dt = data.table(barcode = names(multiome$nCount_RNA),
+								counts_per_cell = multiome$total_counts,
+								genes_per_cell = multiome$nFeature_RNA,
+								mt_per_cell = multiome$pct_counts_mt)
+
+dt[, timepoint := gsub(".*-", "", barcode)]
+```
+
+### Plot data
+
+Now we loop through the timepoints and plot all metrics
+```{r plot data, echo = FALSE, fig.width = 10, fig.height = 6}
+# Plot violin plots
+# Loop through timepoints
+plot_list = lapply(unique(dt$timepoint), function(tp) {
+	dt_subset = dt[timepoint == tp, ]
+	
+	color = colors_to_use[[tp]]
+	
+	counts = ggplot(dt_subset, aes(x = "", y = counts_per_cell)) +
+		geom_violin(fill = color) +
+		geom_boxplot(width = 0.07, outlier.shape = NA) +
+		scale_y_continuous(labels = scales::comma_format()) +
+		labs(x = "", y = "Number of counts per cell") +
+		theme_cowplot() +
+		theme(legend.position = "none", axis.ticks.x = element_blank())
+
+	genes = ggplot(dt_subset, aes(x = "", y = genes_per_cell)) +
+		geom_violin(fill = color) +
+		geom_boxplot(width = 0.07, outlier.shape = NA) +
+		scale_y_continuous(labels = scales::comma_format()) +
+		labs(x = "", y = "Number of genes per cell") +
+		theme_cowplot() +
+		theme(legend.position = "none", axis.ticks.x = element_blank())
+
+	mito = ggplot(dt_subset, aes(x = "", y = mt_per_cell)) +
+		geom_violin(fill = color) +
+		geom_boxplot(width = 0.07, outlier.shape = NA) +
+		scale_y_continuous(labels = scales::comma_format()) +
+		labs(x = "", y = "Mitochondrial counts per cell (%)") +
+		theme_cowplot() +
+		theme(legend.position = "none", axis.ticks.x = element_blank())
+
+	counts + genes + mito + plot_layout(ncol = 3)
+})
+```
+
+### Combined QC
+
+We also plot the combined quantification of all timepoints in one plot.
+
+```{r combined plot, echo = FALSE, fig.width = 10, fig.height = 6}
+counts = ggplot(dt, aes(x = "", y = counts_per_cell)) +
+	geom_violin(fill = "lightblue") +
+	geom_boxplot(width = 0.07, outlier.shape = NA) +
+	scale_y_continuous(labels = scales::comma_format()) +
+	labs(x = "", y = "Number of counts per cell") +
+	theme_cowplot() +
+	theme(legend.position = "none", axis.ticks.x = element_blank())
+
+genes = ggplot(dt, aes(x = "", y = genes_per_cell)) +
+	geom_violin(fill = "lightblue") +
+	geom_boxplot(width = 0.07, outlier.shape = NA) +
+	scale_y_continuous(labels = scales::comma_format()) +
+	labs(x = "", y = "Number of genes per cell") +
+	theme_cowplot() +
+	theme(legend.position = "none", axis.ticks.x = element_blank())
+
+mito = ggplot(dt, aes(x = "", y = mt_per_cell)) +
+	geom_violin(fill = "lightblue") +
+	geom_boxplot(width = 0.07, outlier.shape = NA) +
+	scale_y_continuous(labels = scales::comma_format()) +
+	labs(x = "", y = "Mitochondrial counts per cell (%)") +
+	theme_cowplot() +
+	theme(legend.position = "none", axis.ticks.x = element_blank())
+
+counts + genes + mito + plot_layout(ncol = 3)
+```
