@@ -1,0 +1,194 @@
+# QC plots
+
+## Nanopore QC
+
+Plotting DNA and cDNA libarary QC metrics.
+
+```{r setup, include = FALSE}
+source("./functions/setup.R")
+```
+
+### Load data
+
+First we load the data. This data is output by either scdnalong or scnanoseq pipelines.
+We have included these files in the `data` folder of this repository.
+
+```{r load data, echo = FALSE}
+stats_DNA = fread("./data/dnaqc_nanostat.txt")
+stats_cDNA = fread("./data/cdnaqc_nanostat.txt")
+```
+
+Some data cleaning
+```{r clean data, echo = FALSE}
+setnames(stats_cDNA, c("stats", "D0", "Q1", "Q2", "Q3"))
+stats_cDNA = melt(stats_cDNA, id.vars = "stats", variable.name = "timepoint", value.name = "value")
+stats_cDNA[, value := as.numeric(gsub(",", "", value))]
+stats_cDNA = dcast(stats_cDNA, timepoint ~ stats, value.var = "value")
+
+setnames(stats_DNA, c("stats", "D0", "Q1", "Q2", "Q3"))
+stats_DNA = melt(stats_DNA, id.vars = "stats", variable.name = "timepoint", value.name = "value")
+stats_DNA[, value := as.numeric(gsub(",", "", value))]
+stats_DNA = dcast(stats_DNA, timepoint ~ stats, value.var = "value")
+```
+
+### Plotting N50 values
+
+```{r plot n50, echo = FALSE, fig.width = 8, fig.height = 4}
+ggplot(stats_DNA, aes(x = timepoint, y = `Read length N50_fastq`, fill = timepoint)) +
+	geom_col() +
+	labs(y = "Read length N50 (DNA)", x = "Time point") +
+	scale_fill_manual(values = timepoints_cols) +
+	scale_y_continuous(expand = c(0, 0)) +
+	theme(legend.position = "none")
+
+ggplot(stats_cDNA, aes(x = timepoint, y = `Read length N50:`, fill = timepoint)) +
+	geom_col() +
+	labs(y = "Read length N50 (cDNA)", x = "Time point") +
+	scale_fill_manual(values = timepoints_cols) +
+	scale_y_continuous(expand = c(0, 0)) +
+	theme(legend.position = "none")
+```
+
+### Plotting total reads
+
+```{r plot total reads, echo = FALSE, fig.width = 8, fig.height = 4}
+ggplot(stats_DNA, aes(x = timepoint, y = `Number of reads_fastq`, fill = timepoint)) +
+	geom_col() +
+	labs(y = "Total reads (DNA)", x = "Time point") +
+	scale_fill_manual(values = timepoints_cols) +
+	scale_y_continuous(expand = c(0, 0), labels = scales::comma_format()) +
+	theme(legend.position = "none")
+	
+ggplot(stats_cDNA, aes(x = timepoint, y = `Number of reads:`, fill = timepoint)) +
+	geom_col() +
+	labs(y = "Total reads (cDNA)", x = "Time point") +
+	scale_fill_manual(values = timepoints_cols) +
+	scale_y_continuous(expand = c(0, 0), labels = scales::comma_format()) +
+	theme(legend.position = "none")
+```
+
+## Read length distribution
+
+First get the read lengths by running the following command. Due to the fastq files being protected data, we have ran this and saved the output in the `data` folder.
+
+```{bash get readlengths, echo = FALSE}
+# For each sample
+zcat cDNA_D0.fastq.gz | awk 'NR % 4 == 2 {print length($0)}' | pigz -p 4 > cDNA_lengths/D0_read_lengths.txt.gz
+
+zcat DNA_D0.fastq.gz | awk 'NR % 4 == 2 {print length($0)}' | pigz -p 4 > DNA_lengths/D0_read_lengths.txt.gz
+```
+
+```{r read length distribution, fig.width = 8, fig.height = 4}
+# Load read length data
+readlength_files_DNA = list.files("./data/DNA_lengths", full.names = TRUE, pattern = ".txt.gz")
+readlength_files_cDNA = list.files("./data/cDNA_lengths", full.names = TRUE, pattern = ".txt.gz")
+
+# Read in data
+readlengths_DNA = lapply(readlength_files_DNA, function(x) {
+	dt = fread(x)
+	dt[, sample := gsub("_read_length.*", "", basename(x))]
+	return(dt)
+}) |> rbindlist()
+
+readlengths_cDNA = lapply(readlength_files_cDNA, function(x) {
+	dt = fread(x)
+	dt[, sample := gsub("_read_length.*", "", basename(x))]
+	return(dt)
+}) |> rbindlist()
+
+# Plot
+ggplot(readlengths_DNA, aes(x = sample, y = V1)) +
+	geom_violin(aes(fill = sample, color = sample)) +
+	ggrastr::rasterize(geom_boxplot(width = 0.075), dpi = 300) +
+	scale_fill_manual(values = timepoints_cols) +
+	scale_color_manual(values = timepoints_cols) +
+	scale_y_log10(labels = scales::comma_format()) +
+	labs(y = "Read length DNA (bp)", x = "Sample") +
+	theme_cowplot() +
+	theme(legend.position = "none")
+	
+ggplot(readlengths_cDNA, aes(x = sample, y = V1)) +
+	geom_violin(aes(fill = sample, color = sample)) +
+	ggrastr::rasterize(geom_boxplot(width = 0.075), dpi = 300) +
+	scale_fill_manual(values = timepoints_cols) +
+	scale_color_manual(values = timepoints_cols) +
+	scale_y_log10(labels = scales::comma_format()) +
+	labs(y = "Read length cDNA (bp)", x = "Sample") +
+	theme_cowplot() +
+	theme(legend.position = "none")	
+```
+
+We also plot the histogram of read lengths for all the DNA libraries combined.
+
+```{r read length histogram, echo = FALSE, fig.width = 8, fig.height = 4}
+ggplot(readlengths_DNA, aes(x = V1)) +
+	geom_histogram(bins = 1000) +
+	theme_cowplot() +
+	scale_x_continuous(limits = c(0, 5000), labels = scales::comma_format()) +
+	scale_y_continuous(expand = c(0, 0)) +
+	labs(x = "Read length (bp)", y = "Number of reads")
+```
+
+## Percentage of duplicates
+
+First we plot the percentage of duplicates in the DNA libraries. Here we can simply use that `flagstat` output from the pipeline.
+
+```{r plot DNA duplicates, echo = FALSE, fig.width = 8, fig.height = 4}
+# All reads
+all_flagstats = list.files("./data/flagstat_DNA", pattern = ".flagstat", full.names = TRUE, recursive = TRUE)
+
+# Extract number of reads for each timepoint
+reads = lapply(all_flagstats, function(x) {
+	data.table(sample = gsub(".flagstat", "", basename(x)),
+						 total_reads = as.numeric(gsub(" .*", "", readLines(x)[8])),
+						 duplicates = as.numeric(gsub(" .*", "", readLines(x)[6])))
+}) |> rbindlist()
+
+
+# Merge both data.tables
+reads[, duplication_rate := duplicates / total_reads]
+
+# Plot
+ggplot(reads, aes(x = sample, y = duplication_rate, fill = sample)) +
+	geom_col() +
+	scale_fill_manual(values = timepoints_cols) +
+	labs(x = "", y = "Percentage of duplicate reads (DNA)") +
+	scale_y_continuous(expand = c(0, 0), labels = scales::percent_format()) +
+	theme_cowplot() + 
+	theme(legend.position = "none")
+```
+
+And now the same for cDNA. We need to use the .flagstat files before and after umi deduplication.
+
+```{r plot cDNA duplicates, echo = FALSE, fig.width = 8, fig.height = 4}
+# All reads
+all_flagstats = list.files("./data/flagstat_cDNA",
+													 pattern = "mapped_only.flagstat", full.names = TRUE, recursive = TRUE)
+
+dedup_flagstats = list.files("./data/flagstat_cDNA",
+													 	 pattern = "dedup.sorted.flagstat", full.names = TRUE, recursive = TRUE)
+
+# Extract number of reads for each timepoint
+all_reads = lapply(all_flagstats, function(x) {
+	data.table(sample = gsub(".mapped_only.flagstat", "", basename(x)),
+						 total_reads = as.numeric(gsub(" .*", "", readLines(x)[8])))
+}) |> rbindlist()
+
+dedup_reads = lapply(dedup_flagstats, function(x) {
+	data.table(sample = gsub(".dedup.sorted.flagstat", "", basename(x)),
+						 dedup_reads = as.numeric(gsub(" .*", "", readLines(x)[8])))
+}) |> rbindlist()
+
+dt = merge(all_reads, dedup_reads, by = "sample")
+dt[, saturation := dedup_reads / total_reads]
+dt[, duplication_rate := (total_reads - dedup_reads) / total_reads]
+
+# Plot
+ggplot(dt, aes(x = sample, y = duplication_rate, fill = sample)) +
+	geom_col() +
+	scale_fill_manual(values = timepoint_cols) +
+	labs(x = "", y = "Percentage of duplicate reads (cDNA)") +
+	scale_y_continuous(expand = c(0, 0), labels = scales::percent_format()) +
+	theme_cowplot() + 
+	theme(legend.position = "none")
+```

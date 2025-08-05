@@ -1,0 +1,128 @@
+# Single-cell copy number calling
+
+We perform single-cell copy number calling using the `ASCATsc` package, which is designed for analyzing single-cell sequencing data. The following steps outline the process:
+
+## ASCATsc
+
+### Loading packages
+
+First we load packages. These need to be preinstalled in your R environment. You can find all packages in the `setup.R` file in the `functions` folder.
+Furthermore, we also load functions that help us with plotting and saving.
+
+```{r set up, warning = FALSE, message = FALSE}
+# Source setup file including all required packages and functions
+source("./functions/setup.R")
+```
+
+### Running ASCATsc
+
+Due to time constraints and data accessibility, the following code chunks are not actually run. 
+
+```{r set params, eval = FALSE}
+
+## Set params
+# Get list of all bam files
+bams  = list.files("./scdnalong/results", pattern = ".bam$", full.names = TRUE, recursive = TRUE)
+
+# Specify output directory
+outdir = "./results_ascatsc/"
+
+# Specify parameters
+genome = "hg38" # Reference genome to use
+binsize = 500000 # Size of bins for copy number calling
+chroms = paste0("chr", c(1:22, "X")) # Chromosomes
+sex = "female" # Sex of samples
+prefix = ifelse(grepl("chr", chroms[1]), "chr", "") # Prefix for chromosome names
+ploidies = seq(1.5, 3, 0.01) # Range of ploidies to test
+purs = 1 # Range of purities to test (1 for single-cell data)
+psi = 6 # Max ploidy
+multipcf = TRUE # Use multi-sample copy number calling
+penalty = 1 / 15 # Penalty for copy number calling
+threads = 8
+```
+
+After setting all parameters you can run `ASCATsc` with the following command:
+```{r run ASCATsc, eval = FALSE}
+res = run_sc_sequencing(tumour_bams = bams,
+                      build = genome,
+                      allchr = chroms, ## Needs a "chr" instead of "" if reference genome has 'chr' prefix
+                      sex = rep(sex, length(bams)),
+                      chrstring_bam = prefix,  ## Needs a "chr" instead of "" if reference genome has 'chr' prefix
+                      purs = purs, ## purity grid values
+                      ploidies = ploidies, ## average ploidy grid values
+                      maxtumourpsi = psi, ## maximum tumour ploidy
+                      ## bin size - reduce if enough sequencing reads (look at dpb (depth per bin) value in plots can go down to 100bp or even lower)
+                      binsize = binsize,
+                      pcchromosome = 0.08,
+                      projectname = "multiome",
+                      MC.CORES = threads, ##number of cores available
+                      multipcf = multipcf, ##use multipcf for multi-track segmentation if multi-sample sequencing
+                      segmentation_alpha = penalty,
+                      barcodes_10x = NA, # Set to NA if you have 10x-style barcodes (dont ask me why its set like this)
+                      predict_refit = FALSE,
+                      print_results = FALSE)
+```
+
+Results are then saved to `res`. Since this step can take a while, I suggest to save the results
+
+```{r save results, eval = FALSE}
+saveRDS(res, paste0(outdir, "/ASCAT.sc_results.rds")) ## save full results
+```
+
+### Saving copy number profiles and bins
+
+Since the output format of `ASCATsc` is not the most convenient for downstream processing, we take the key results and save them as well.
+
+```{r save profiles, eval = FALSE}
+# Get bins
+bins = pblapply(names(res$lSe), function(chr) {
+  data.table(chr = chr,
+            start = res$lSe[[chr]]$start,
+            end = res$lSe[[chr]]$end)
+}, cl = threads)
+bins = rbindlist(bins)
+
+# Get profiles, checking if manual refitting has been performed
+profiles = pblapply(names(res$allProfiles), function(cell) {
+  if (!is.null(res$allProfiles.refitted.manual[[cell]])) {
+    dt = as.data.table(res$allProfiles.refitted.manual[[cell]])
+    rep(dt$total_copy_number, as.numeric(dt$num.mark)) |> as.numeric()
+  } else {
+    dt = as.data.table(res$allProfiles[[cell]])
+    rep(dt$total_copy_number, as.numeric(dt$num.mark)) |> as.numeric()
+  }
+}, cl = threads)
+profiles = do.call(cbind, profiles) |> data.table()
+setnames(profiles, names(res$allProfiles))
+
+# Get raw segments
+raw = pblapply(names(res$allProfiles), function(cell) {
+  dt = rbindlist(res$allTracks.processed[[cell]]$lCTS)
+
+  # Return original or refitted one if present
+  if (!is.null(res$allSolutions.refitted.manual[[cell]])) {
+    return(res$allSolutions.refitted.manual[[cell]]$ploidy * 2 ^ (dt$smoothed))
+  } else {
+    return(res$allSolutions[[cell]]$ploidy * 2 ^ (dt$smoothed))
+  }
+})
+raw = do.call(cbind, raw) |> data.table()
+setnames(raw, names(res$allProfiles))
+
+# Save profiles
+saveRDS(list(bins, profiles, raw), paste0(workdir, "/ASCAT.sc_profiles.rds"))
+```
+
+### Plotting results
+
+Finally, we can also plot all the single-cell copy number profiles and heatmap.
+
+```{r plot results, eval = FALSE}
+# Plot profiles
+invisible(pblapply(colnames(profiles), function(cell) {
+  plotProfile(profiles[[cell]], raw[[cell]], bins) |> save_and_plot(paste0(outdir, "/plots/profiles/", cell), height = 6, width = 14, output = "png")
+}, cl = threads))
+
+# Plot Heatmap
+invisible(plotHeatmap(profiles, bins, linesize = 1.5) |> save_and_plot(paste0(outdir, "/plots/genomewideheatmap"), height = 7, width = 20, output = "png"))
+```

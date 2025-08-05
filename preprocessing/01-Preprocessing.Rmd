@@ -1,0 +1,211 @@
+# Preprocessing
+
+## Basecalling of nanopore pod5 files
+
+For untargeted SPLONGGET, we run the basecalling on the pod5 files using the following command:
+
+```{bash basecalling, eval = FALSE}
+INPUT=/path/to/D0_pod5_files/
+OUTPUT=/path/to/D0_merged.fastq.gz
+
+dorado basecaller \
+	/path/to/model/dna_r10.4.1_e8.2_400bps_sup@v5.0.0 \
+	${INPUT} \
+	--recursive --emit-fastq | gzip > ${OUTPUT}
+```
+
+For targeted SPLONGGET, the data is multiplexed so we also have to perform demultiplexing. The following command will basecall and demultiplex the pod5 files:
+
+```{bash basecalling and demultiplexing, eval = FALSE}
+INPUT=/path/to/pod5_files/
+OUTPUT=/path/to/outfolder/
+
+dorado basecaller \
+	/path/to/model/dna_r10.4.1_e8.2_400bps_sup@v5.0.0 \
+	${INPUT} \
+	--kit-name SQK-NBD111-24 \
+	--recursive > ${OUTPUT}/combined_tagged.ubam
+
+dorado demux \
+	--output-dir ${OUTPUT} \
+	--emit-fastq \
+	--no-classify \
+	${OUTPUT}/combined_tagged.ubam
+```
+
+The `INPUT` and `OUTPUT` variables should be set to the appropriate paths for your data. The `--kit-name` option is used to specify the kit used for sequencing to demultiplex the samples.
+
+## Processing cDNA libraries
+
+### Running scnanoseq
+
+To process cDNA libraries we use `nf-core/scnanoseq` version 1.0.0. The pipeline is run with the following command:
+```{bash scnanoseq, eval = FALSE}
+nextflow run nf-core/scnanoseq -r 1.0.0 \
+	--input samplesheet.csv \
+	--outdir ./results \
+	--fasta genome.fa \
+	--gtf genes.gtf \
+	--whitelist cellranger_arc_rna.737K-arc-v1.txt \
+	--barcode_format 10X_3v3 \
+	--split_amount 500000 \
+	-resume
+```
+
+Where the samplesheet is a comma-separated file with the following columns:
+```{bash samplesheet, eval = FALSE}
+sample,fastq_1,cell_count
+D0,/path/to/cDNA_D0.fastq.gz,3000
+Q1,/path/to/cDNA_Q1.fastq.gz,3000
+Q2,/path/to/cDNA_Q2.fastq.gz,3000
+Q3,/path/to/cDNA_Q3.fastq.gz,3000
+```
+
+Parameters in the command:
+
+- `--input`: Path to the samplesheet.
+- `--outdir`: Output directory where the results will be stored.
+- `--fasta`: Path to the reference genome FASTA file.
+- `--gtf`: Path to the GTF file containing gene annotations.
+- `--whitelist`: Path to the cell barcode whitelist file, which can be obtained from 10X Genomics.
+- `--barcode_format`: Specifies the format of the barcodes used in the data, which is `10X_3v3` in our case.
+- `--split_amount`: Number of reads to split into separate FASTQ files for parallel processing.
+
+Processing for targeted or untargeted SPLONGGET is the same. You can also have both targeted and untargeted samples in the same samplesheet.
+
+### scnanoseq output
+
+The output should look as follows:
+```{bash scnanoseq output, eval = FALSE}
+├── D0
+│   ├── bam
+│   │   ├── barcode_tagged
+│   │   ├── dedup
+│   │   ├── mapped_only
+│   │   └── original
+│   ├── blaze
+│   ├── fastq
+│   ├── isoquant
+│   └── qc
+├── Q1
+│   ├── bam
+│   │   ├── barcode_tagged
+│   │   ├── dedup
+│   │   ├── mapped_only
+│   │   └── original
+│   ├── blaze
+│   ├── fastq
+│   ├── isoquant
+│   └── qc
+├── Q2
+│   ├── bam
+│   │   ├── barcode_tagged
+│   │   ├── dedup
+│   │   ├── mapped_only
+│   │   └── original
+│   ├── blaze
+│   ├── fastq
+│   ├── isoquant
+│   └── qc
+├── Q3
+│   ├── bam
+│   │   ├── barcode_tagged
+│   │   ├── dedup
+│   │   ├── mapped_only
+│   │   └── original
+│   ├── blaze
+│   ├── fastq
+│   ├── isoquant
+│   └── qc
+├── batch_qcs
+│   ├── nanocomp
+│   └── read_counts
+├── pipeline_info
+└── references
+    └── minimap_index
+```
+
+Key output:
+
+* `batch_qcs`: contains QC reports from all samples combined. 
+* `${sample}/isoquant`: contains gene and transcript quantification results.
+* `${sample}/bam/dedup`: contains deduplicated final bam files.
+* `${sample}/blaze`: contains the used barcode whitelist (which is a subset of the 10X whitelist), 
+* `${sample}/qc`: contains quality control reports.
+
+
+## Processing DNA libraries
+
+### Running scdnalong
+
+To process DNA libraries, we use `IntGenomicsLabs/scdnalong` version 0.0.1. The pipeline is run with the following command:
+```{bash scdnalong, eval = FALSE}
+nextflow run IntGenomicsLabs/scdnalong -r dev \
+	--input samplesheet.csv \
+	--outdir ./results \
+	--fasta Homo_sapiens_assembly38_masked_noALT.fasta \
+	--barcode_format 10x_atac \
+	--split_fastq_n 24 \
+	--whitelist cellranger_arc_atac.737K-arc-v1.txt \
+	-resume
+```
+
+The samplesheet should look as follows:
+```{bash samplesheet dna, eval = FALSE}
+sample,fastq_1
+D0,/path/to/BM_XG111_D0_ATAC_merged.fastq.gz
+Q1,/path/to/BM_XG111_Q1_ATAC_merged.fastq.gz
+Q2,/path/to/BM_XG111_Q2_ATAC_merged.fastq.gz
+Q3,/path/to/BM_XG111_Q3_ATAC_merged.fastq.gz
+```
+
+Parameters in the command:
+
+- `--input`: Path to the samplesheet.
+- `--outdir`: Output directory where the results will be stored.
+- `--fasta`: Path to the reference genome FASTA file.
+- `--barcode_format`: Specifies the format of the barcodes used in the data, which is `10x_atac` in our case.
+- `--whitelist`: Path to the cell barcode whitelist file, which can be obtained from 10X Genomics.
+- `--split_fastq_n`: Number of reads to split into separate FASTQ files for parallel processing.
+
+### scdnalong output
+
+The output should look as follows:
+```{bash scdnalong output, eval = FALSE}
+results
+├── D0
+│   ├── bam
+│   │   └── dedup
+│   ├── flexiplex
+│   └── qc
+├── Q1
+│   ├── bam
+│   │   └── dedup
+│   ├── flexiplex
+│   └── qc
+├── Q2
+│   ├── bam
+│   │   └── dedup
+│   ├── flexiplex
+│   └── qc
+├── Q3
+│   ├── bam
+│   │   └── dedup
+│   ├── flexiplex
+│   └── qc
+├── batch_qcs
+│   ├── multiqc
+│   └── nanocomp
+├── pipeline_info
+├── references
+│   └── minimap_index
+└── software_versions
+```
+
+Key output:
+
+* `batch_qcs`: contains QC reports from all samples combined. 
+* `${sample}/bam/dedup`: contains deduplicated final bam files. 
+* `${sample}/flexiplex`: contains the used barcode whitelist (which is a subset of the 10X whitelist), 
+* `${sample}/qc`: contains quality control reports.
+
