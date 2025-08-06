@@ -9,12 +9,16 @@ file list and description
 - `03_pycistopic.ipynb` - running pycistopic up to topic modelling  <br>
 - `03a_pycistopic_modelling.slurm` - topic modelling slurm submission file <br>
 - `03b_pycistopic_modelling.py` - topic modelling script <br>
-- `04_pycistopic_post_modelling.ipynb` - analysis post topic modelling <br>
-- `05_subset_cistopic.ipynb` - subsetting cistopic object to analysie subset of tumour cells
-- `06_pycistopic_modelling.py` - running cistopic modelling on these cells
-- `06_pycistopic_modelling.slurm` - topic modelling submission file
-- `07_pycistopic_post_modelling.ipynb` - analysis post topic modelling
-
+- `04_pycistopic_post_modelling.ipynb` - post topic modelling analysis <br>
+- `preprocessing/atac/D0_Q1_subset/01_subset_cistopic.ipynb` - subsetting the cells from D0 and Q1 <br>
+- `preprocessing/atac/D0_Q1_subset/02_pycistopic_modelling.py` - topic modelling for subset cells <br>
+- `preprocessing/atac/D0_Q1_subset/02_pycistopic_modelling.slurm` - topic modelling submission script for subset cells <br>
+- `preprocessing/atac/D0_Q1_subset/03_pycistopic_post_modelling.ipynb` - post topic modelling analysis <br>
+- `preprocessing/atac/Q3_subset/01_pycistopic.ipynb` - pycistopic running from scratch for Q3 cells <br>
+- `preprocessing/atac/Q3_subset/02_pycistopic_modelling.py` - topic modelling script <br>
+- `preprocessing/atac/Q3_subset/02_pycistopic_modelling.slurm` - topic modelling submission file <br>
+- `preprocessing/atac/Q3_subset/03_pycistopic_post_modelling.ipynb` - analysis post topic modelling <br>
+- `preprocessing/atac/Q3_subset/umap_coordinates_extraction.ipynb` - extract UMAP coordinates for plotting <br>
 
 The details on environment
 - `requirements_snapatac2.txt` for `02_fragment_creation.ipynb`

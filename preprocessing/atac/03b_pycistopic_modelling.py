@@ -15,7 +15,7 @@ with open(file_path, 'rb') as file:
 print(cistopic_obj)
 
 
-os.environ['MALLET_MEMORY'] = '250G' # adjust accordingly
+os.environ['MALLET_MEMORY'] = '250G'
 from pycisTopic.lda_models import run_cgs_models_mallet
 # Configure path Mallet
 mallet_path="Mallet-202108/bin/mallet"
