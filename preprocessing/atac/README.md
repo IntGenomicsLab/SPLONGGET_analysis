@@ -22,4 +22,4 @@ file list and description
 
 The details on environment
 - `requirements_snapatac2.txt` for `02_fragment_creation.ipynb`
-- `requirements_pycistopic.txt` for `03_pycistopic.ipynb`,`03a_pycistopic_modelling.slurm`,`03b_pycistopic_modelling.py`, `04_pycistopic_post_modelling.ipynb`, `05_subset_cistopic.ipynb`,`06_pycistopic_modelling.py`, `06_pycistopic_modelling.slurm`, `07_pycistopic_post_modelling.ipynb`
+- `requirements_pycistopic.txt` for all the other notebooks
