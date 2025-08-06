@@ -5,11 +5,14 @@
 #SBATCH -p partition
 #SBATCH --mem 270G
 #SBATCH --time=10:00:00
+#SBATCH --cluster cluster
+#SBATCH --mail-type=FAIL,END
+#SBATCH --mail-user=mail@mail.mail
 #SBATCH --job-name="cistopic_modelling"
 #SBATCH --output=logs/R-%x.%j.out
 #SBATCH --error=logs/R-%x.%j.err
 
 # script to run cistopic modelling
 
-apptainer run -B /data,$VSC_SCRATCH,/lustre1/,/staging \
-pycistopic_2.0a.sif python /atac/03b_pycistopic_modelling.py
+apptainer run -B /data,/scratch/ \
+pycistopic_2.0a.sif python 03b_pycistopic_modelling.py
