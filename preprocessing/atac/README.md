@@ -20,6 +20,11 @@ file list and description
 - `preprocessing/atac/Q3_subset/03_pycistopic_post_modelling.ipynb` - analysis post topic modelling <br>
 - `preprocessing/atac/Q3_subset/umap_coordinates_extraction.ipynb` - extract UMAP coordinates for plotting <br>
 
-The details on environment
+
+The details on environment <br>
 - `requirements_snapatac2.txt` for `02_fragment_creation.ipynb`
 - `requirements_pycistopic.txt` for all the other notebooks
+
+
+Input files <br>
+- the blacklist region for the ATAC analysis can be downloaded from here: https://github.com/aertslab/pycisTopic/blob/main/blacklist/hg38-blacklist.v2.bed
