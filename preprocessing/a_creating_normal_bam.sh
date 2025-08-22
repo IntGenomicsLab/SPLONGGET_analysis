@@ -34,3 +34,5 @@ samtools index ${OUTBASE}/normal_${omic}_${SAMPLE}_final.bam
 
 
 #After this go to the output folder and use samtools merge * normal_cells.bam
+
+#Important note: this method can be used to make every pseudobulk -> This method was also used to create a bulk of the cytotoxic T -cell (CART cells), for later LOH analysis
