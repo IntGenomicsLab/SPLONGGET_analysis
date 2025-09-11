@@ -1,0 +1,48 @@
+# Genome coverage analysis
+
+To assess the genome coverage we use mosdepth and plot the cumulative coverage distribution.
+
+## Run mosdepth
+
+```{bash run mosdepth, eval = FALSE}
+# Run mosdepth long read samples
+mosdepth --threads 4 --fast-mode D0 ./scdnalong/results/D0.dedup.sorted.bam&
+mosdepth --threads 4 --fast-mode Q1 ./scdnalong/results/Q1.dedup.sorted.bam&
+mosdepth --threads 4 --fast-mode Q2 ./scdnalong/results/Q2.dedup.sorted.bam&
+mosdepth --threads 4 --fast-mode Q3 ./scdnalong/results/Q3.dedup.sorted.bam&
+
+# Run mosdepth short read sample
+mosdepth --threads 4 --fast-mode Q3_short ./scdnalong/results_short/Q3_short.dedup.sorted.bam&
+```
+
+## Plot coverage
+
+```{r set up, warning = FALSE, message = FALSE}
+# Source setup file including all required packages and functions
+source("./functions/setup.R")
+```
+
+```{r plot coverage, echo = FALSE}
+# List of input files
+input_files = list.files("./data/mosdepth/",
+												 pattern = "*.mosdepth.global.dist.txt",
+												 full.names = TRUE)
+
+# Read in data
+data = lapply(input_files, function(file) {
+	dt = fread(file)
+	dt[, sample := gsub(".mosdepth.global.dist.txt", "", basename(file))]
+}) |> rbindlist()
+
+data_total = data[V1 == "total"]
+data_total[, method := ifelse(grepl("_short", sample), "short-read sequencing", "SPLONGGET")]
+data_total[, sample := gsub("_short", "", sample)]
+
+# Plot
+ggplot(data_total, aes(x = V2, y = V3, color = sample, linetype = method)) +
+  geom_line(linewidth = 1) +
+  theme_cowplot() +
+	scale_x_continuous(limits = c(0, 100)) + 
+	scale_colour_manual(values = timepoints_cols) +
+  labs(x = "Coverage", y = "Proportion of genome at coverage", colour = "Time point", linetype = "Sequencing method")
+```

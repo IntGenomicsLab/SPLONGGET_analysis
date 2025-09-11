@@ -10,7 +10,7 @@ source("./functions/setup.R")
 ### Load data
 
 ```{r load data, echo = FALSE}
-multiome = schard::h5ad2seurat("./data/multiome_adata_04072025.h5ad")
+multiome = schard::h5ad2seurat("./data/multiome_adata_Q3_short_09072025.h5ad")
 ```
 
 ### Prepare data
@@ -25,50 +25,7 @@ dt = data.table(barcode = names(multiome$nCount_RNA),
 dt[, timepoint := gsub(".*-", "", barcode)]
 ```
 
-### Plot data
-
-Now we loop through the timepoints and plot all metrics
-```{r plot data, echo = FALSE, fig.width = 10, fig.height = 6}
-# Plot violin plots
-# Loop through timepoints
-plot_list = lapply(unique(dt$timepoint), function(tp) {
-	dt_subset = dt[timepoint == tp, ]
-	
-	color = timepoints_cols[[tp]]
-	
-	counts = ggplot(dt_subset, aes(x = "", y = counts_per_cell)) +
-		geom_violin(fill = color) +
-		geom_boxplot(width = 0.07, outlier.shape = NA) +
-		scale_y_continuous(labels = scales::comma_format()) +
-		labs(x = "", y = "Number of counts per cell") +
-		theme_cowplot() +
-		theme(legend.position = "none", axis.ticks.x = element_blank())
-
-	genes = ggplot(dt_subset, aes(x = "", y = genes_per_cell)) +
-		geom_violin(fill = color) +
-		geom_boxplot(width = 0.07, outlier.shape = NA) +
-		scale_y_continuous(labels = scales::comma_format()) +
-		labs(x = "", y = "Number of genes per cell") +
-		theme_cowplot() +
-		theme(legend.position = "none", axis.ticks.x = element_blank())
-
-	mito = ggplot(dt_subset, aes(x = "", y = mt_per_cell)) +
-		geom_violin(fill = color) +
-		geom_boxplot(width = 0.07, outlier.shape = NA) +
-		scale_y_continuous(labels = scales::comma_format()) +
-		labs(x = "", y = "Mitochondrial counts per cell (%)") +
-		theme_cowplot() +
-		theme(legend.position = "none", axis.ticks.x = element_blank())
-
-	counts + genes + mito + plot_layout(ncol = 3)
-})
-
-plot_list
-```
-
-### Combined QC
-
-We also plot the combined quantification of all timepoints in one plot.
+### Plot QC
 
 ```{r combined plot, echo = FALSE, fig.width = 10, fig.height = 6}
 counts = ggplot(dt, aes(x = "", y = counts_per_cell)) +

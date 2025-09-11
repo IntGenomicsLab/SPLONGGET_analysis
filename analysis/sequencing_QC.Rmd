@@ -34,7 +34,7 @@ stats_DNA = dcast(stats_DNA, timepoint ~ stats, value.var = "value")
 ### Plotting N50 values
 
 ```{r plot n50, echo = FALSE, fig.width = 8, fig.height = 4}
-ggplot(stats_DNA, aes(x = timepoint, y = `Read length N50_fastq`, fill = timepoint)) +
+ggplot(stats_DNA, aes(x = timepoint, y = `Read length N50:`, fill = timepoint)) +
 	geom_col() +
 	labs(y = "Read length N50 (DNA)", x = "Time point") +
 	scale_fill_manual(values = timepoints_cols) +
@@ -52,7 +52,7 @@ ggplot(stats_cDNA, aes(x = timepoint, y = `Read length N50:`, fill = timepoint))
 ### Plotting total reads
 
 ```{r plot total reads, echo = FALSE, fig.width = 8, fig.height = 4}
-ggplot(stats_DNA, aes(x = timepoint, y = `Number of reads_fastq`, fill = timepoint)) +
+ggplot(stats_DNA, aes(x = timepoint, y = `Number of reads:`, fill = timepoint)) +
 	geom_col() +
 	labs(y = "Total reads (DNA)", x = "Time point") +
 	scale_fill_manual(values = timepoints_cols) +
@@ -71,7 +71,7 @@ ggplot(stats_cDNA, aes(x = timepoint, y = `Number of reads:`, fill = timepoint))
 
 First get the read lengths by running the following command. Due to the fastq files being protected data, we have ran this and saved the output in the `data` folder.
 
-```{bash get readlengths, echo = FALSE}
+```{bash get readlengths, echo = FALSE, eval = FALSE}
 # For each sample
 zcat cDNA_D0.fastq.gz | awk 'NR % 4 == 2 {print length($0)}' | pigz -p 4 > cDNA_lengths/D0_read_lengths.txt.gz
 
@@ -186,7 +186,7 @@ dt[, duplication_rate := (total_reads - dedup_reads) / total_reads]
 # Plot
 ggplot(dt, aes(x = sample, y = duplication_rate, fill = sample)) +
 	geom_col() +
-	scale_fill_manual(values = timepoint_cols) +
+	scale_fill_manual(values = timepoints_cols) +
 	labs(x = "", y = "Percentage of duplicate reads (cDNA)") +
 	scale_y_continuous(expand = c(0, 0), labels = scales::percent_format()) +
 	theme_cowplot() + 
