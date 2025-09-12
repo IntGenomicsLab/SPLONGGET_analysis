@@ -69,7 +69,7 @@ samtools view -F 1284 ./scnanoseq/results_targeted/Q3/bam/dedup/Q3.dedup.sorted.
 ## Load data
 
 First we load the data. These files
-```{r load data, echo = FALSE}
+```{r load data}
 # List files
 DNA = list.files("./data/targeted_coverage_enrichment/DNA",
 								 full.names = TRUE)
@@ -109,13 +109,13 @@ cDNA_coverage[, coverage := on_target / total]
 
 ## Calculate fold enrichment
 
-```{r calculate fold enrichment, echo = FALSE}
+```{r calculate fold enrichment}
 # Calculate fold enrichment per timepoint
 cDNA_coverage_enrichment = dcast(cDNA_coverage, timepoint ~ method, value.var = "coverage")
 cDNA_coverage_enrichment[, fold_enrichment := targeted / untargeted]
 ```
 
-```{r plot fold enrichment, echo = FALSE, fig.width = 8, fig.height = 4}
+```{r plot fold enrichment, fig.width = 8, fig.height = 4}
 # Plot cDNA coverage
 cDNA_coverage[, color_by := paste0(timepoint, "_", method)]
 ggplot(cDNA_coverage, aes(x = timepoint, y = coverage * 1e6, fill = timepoint, alpha = method)) +
