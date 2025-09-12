@@ -1,0 +1,65 @@
+# Q3 UMAPs
+
+This Rmarkdown creates UMAPs for the Q3 short and long read data.
+
+```{r setup, include = FALSE}
+source("./functions/setup.R")
+```
+
+## Load data
+
+```{r load data, echo = FALSE}
+# Load in data
+short = schard::h5ad2seurat("./data/multiome_adata_Q3_short_09072025.h5ad")
+long = schard::h5ad2seurat("./data/multiome_adata_Q3_long_09072025.h5ad")
+```
+
+## Plot cDNA UMAPs
+
+First plot for short-read sequencing data
+
+```{r plot UMAPs, echo = FALSE, fig.width = 10, fig.height = 5}
+# Get UMAP
+umap_dt_short = data.table(short@reductions$Xumap_@cell.embeddings)
+umap_dt_short[, sample := rownames(short@reductions$Xumap_@cell.embeddings)]
+
+# Merge with annotation
+annot_short = data.table(sample = names(short$celltypist_cell_label_fine),
+												 annotation = short$celltypist_cell_label_fine)
+
+annot_short[, annotation := gsub("Pro-B cells", "Tumour cells", annotation)]
+
+umap_dt_short = merge(umap_dt_short, annot_short, by = "sample", all.x = TRUE)
+
+# Plot UMAPs
+ggplot(umap_dt_short, aes(x = Xumap_1, y = Xumap_2, color = annotation)) +
+	geom_point(size = .5) +
+	scale_color_manual(values = annot_cols) +
+	theme_cowplot() +
+	labs(x = "UMAP 1", y = "UMAP 2", color = "Cell types") + 
+	guides(colour = guide_legend(override.aes = list(size = 3))) +
+	theme(legend.key.size = unit(.5, "cm"))
+```
+
+Now for SPLONGGET data
+```{r plot UMAPs long, echo = FALSE, fig.width = 10, fig.height = 5}
+umap_dt_long = data.table(long@reductions$Xumap_@cell.embeddings)
+umap_dt_long[, sample := rownames(long@reductions$Xumap_@cell.embeddings)]
+
+# Merge with annotation
+annot_long = data.table(sample = names(long$celltypist_cell_label_fine),
+									 annotation = long$celltypist_cell_label_fine)
+
+annot_long[, annotation := gsub("Pro-B cells", "Tumour cells", annotation)]
+
+umap_dt_long = merge(umap_dt_long, annot_long, by = "sample", all.x = TRUE)
+
+# Plot UMAPs
+ggplot(umap_dt_long, aes(x = Xumap_1, y = Xumap_2, color = annotation)) +
+	geom_point(size = .5) +
+	scale_color_manual(values = annot_cols) +
+	theme_cowplot() +
+	labs(x = "UMAP 1", y = "UMAP 2", color = "Cell types") + 
+	guides(colour = guide_legend(override.aes = list(size = 3))) +
+	theme(legend.key.size = unit(.5, "cm"))
+```
