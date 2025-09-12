@@ -1,0 +1,140 @@
+# Targeted SPLONGGET Coverage
+
+
+Plotting DNA and cDNA libarary QC metrics.
+
+```{r setup, include = FALSE}
+source("./functions/setup.R")
+```
+
+## Generate coverage files
+
+First we generate targeted and untargeted coverage, both off-targets and total coverage.
+
+### DNA
+
+```{bash coverage files, eval = FALSE}
+# untargeted DNA - on target
+bedtools intersect -a ./scdnalong/results/D0/bam/dedup/D0.dedup.sorted.bam -b ./data/variant_targets.bed -u | samtools view -F 1284 -c > ./data/targeted_coverage_enrichment/DNA/D0_untargeted_on_target.txt&
+bedtools intersect -a ./scdnalong/results/Q1/bam/dedup/Q1.dedup.sorted.bam -b ./data/variant_targets.bed -u | samtools view -F 1284 -c > ./data/targeted_coverage_enrichment/DNA/Q1_untargeted_on_target.txt&
+bedtools intersect -a ./scdnalong/results/Q2/bam/dedup/Q2.dedup.sorted.bam -b ./data/variant_targets.bed -u | samtools view -F 1284 -c > ./data/targeted_coverage_enrichment/DNA/Q2_untargeted_on_target.txt&
+bedtools intersect -a ./scdnalong/results/Q3/bam/dedup/Q3.dedup.sorted.bam -b ./data/variant_targets.bed -u | samtools view -F 1284 -c > ./data/targeted_coverage_enrichment/DNA/Q3_untargeted_on_target.txt&
+
+# untargeted DNA - total
+samtools view -F 1284 ./scdnalong/results/D0/bam/dedup/D0.dedup.sorted.bam -c > ./data/targeted_coverage_enrichment/DNA/D0_untargeted_total.txt&
+samtools view -F 1284 ./scdnalong/results/Q1/bam/dedup/Q1.dedup.sorted.bam -c > ./data/targeted_coverage_enrichment/DNA/Q1_untargeted_total.txt&
+samtools view -F 1284 ./scdnalong/results/Q2/bam/dedup/Q2.dedup.sorted.bam -c > ./data/targeted_coverage_enrichment/DNA/Q2_untargeted_total.txt&
+samtools view -F 1284 ./scdnalong/results/Q3/bam/dedup/Q3.dedup.sorted.bam -c > ./data/targeted_coverage_enrichment/DNA/Q3_untargeted_total.txt&
+
+# targeted DNA - on target
+bedtools intersect -a ./scdnalong/results_targeted/D0/bam/dedup/D0.dedup.sorted.merged.bam -b ./data/variant_targets.bed -u | samtools view -F 1284 -c > ./data/targeted_coverage_enrichment/DNA/D0_targeted_on_target.txt&
+bedtools intersect -a ./scdnalong/results_targeted/Q1/bam/dedup/Q1.dedup.sorted.merged.bam -b ./data/variant_targets.bed -u | samtools view -F 1284 -c > ./data/targeted_coverage_enrichment/DNA/Q1_targeted_on_target.txt&
+bedtools intersect -a ./scdnalong/results_targeted/Q2/bam/dedup/Q2.dedup.sorted.merged.bam -b ./data/variant_targets.bed -u | samtools view -F 1284 -c > ./data/targeted_coverage_enrichment/DNA/Q2_targeted_on_target.txt&
+bedtools intersect -a ./scdnalong/results_targeted/Q3/bam/dedup/Q3.dedup.sorted.merged.bam -b ./data/variant_targets.bed -u | samtools view -F 1284 -c > ./data/targeted_coverage_enrichment/DNA/Q3_targeted_on_target.txt&
+
+# targeted DNA - total
+samtools view -F 1284 ./scdnalong/results_targeted/D0/bam/dedup/D0.dedup.sorted.merged.bam -c > ./data/targeted_coverage_enrichment/DNA/D0_targeted_total.txt&
+samtools view -F 1284 ./scdnalong/results_targeted/D0/bam/dedup/Q1.dedup.sorted.merged.bam -c > ./data/targeted_coverage_enrichment/DNA/Q1_targeted_total.txt&
+samtools view -F 1284 ./scdnalong/results_targeted/Q2/bam/dedup/Q2.dedup.sorted.merged.bam -c > ./data/targeted_coverage_enrichment/DNA/Q2_targeted_total.txt&
+samtools view -F 1284 ./scdnalong/results_targeted/Q3/bam/dedup/Q3.dedup.sorted.merged.bam -c > ./data/targeted_coverage_enrichment/DNA/Q3_targeted_total.txt&
+```
+
+### cDNA
+```{bash coverage files cDNA, eval = FALSE}
+# untargeted cDNA - on target
+bedtools intersect -a ./scnanoseq/results/D0/bam/dedup/D0.dedup.sorted.bam -b ./data/variant_targets.bed -u | samtools view -F 1284 -c > ./data/targeted_coverage_enrichment/cDNA/D0_untargeted_on_target.txt&
+bedtools intersect -a ./scnanoseq/results/Q1/bam/dedup/Q1.dedup.sorted.bam -b ./data/variant_targets.bed -u | samtools view -F 1284 -c > ./data/targeted_coverage_enrichment/cDNA/Q1_untargeted_on_target.txt&
+bedtools intersect -a ./scnanoseq/results/Q2/bam/dedup/Q2.dedup.sorted.bam -b ./data/variant_targets.bed -u | samtools view -F 1284 -c > ./data/targeted_coverage_enrichment/cDNA/Q2_untargeted_on_target.txt&
+bedtools intersect -a ./scnanoseq/results/Q3/bam/dedup/Q3.dedup.sorted.bam -b ./data/variant_targets.bed -u | samtools view -F 1284 -c > ./data/targeted_coverage_enrichment/cDNA/Q3_untargeted_on_target.txt&
+
+# untargeted cDNA - total
+samtools view -F 1284 ./scnanoseq/results/D0/bam/dedup/D0.dedup.sorted.bam -c > ./data/targeted_coverage_enrichment/cDNA/D0_untargeted_total.txt&
+samtools view -F 1284 ./scnanoseq/results/Q1/bam/dedup/Q1.dedup.sorted.bam -c > ./data/targeted_coverage_enrichment/cDNA/Q1_untargeted_total.txt&
+samtools view -F 1284 ./scnanoseq/results/Q2/bam/dedup/Q2.dedup.sorted.bam -c > ./data/targeted_coverage_enrichment/cDNA/Q2_untargeted_total.txt&
+samtools view -F 1284 ./scnanoseq/results/Q3/bam/dedup/Q3.dedup.sorted.bam -c > ./data/targeted_coverage_enrichment/cDNA/Q3_untargeted_total.txt&
+
+# targeted cDNA - on target
+bedtools intersect -a ./scnanoseq/results_targeted/D0/bam/dedup/D0.dedup.sorted.merged.bam -b ./data/variant_targets.bed -u | samtools view -F 1284 -c > ./data/targeted_coverage_enrichment/cDNA/D0_targeted_on_target.txt&
+bedtools intersect -a ./scnanoseq/results_targeted/Q1/bam/dedup/Q1.dedup.sorted.merged.bam -b ./data/variant_targets.bed -u | samtools view -F 1284 -c > ./data/targeted_coverage_enrichment/cDNA/Q1_targeted_on_target.txt&
+bedtools intersect -a ./scnanoseq/results_targeted/Q2/bam/dedup/Q2.dedup.sorted.merged.bam -b ./data/variant_targets.bed -u | samtools view -F 1284 -c > ./data/targeted_coverage_enrichment/cDNA/Q2_targeted_on_target.txt&
+bedtools intersect -a ./scnanoseq/results_targeted/Q3/bam/dedup/Q3.dedup.sorted.merged.bam -b ./data/variant_targets.bed -u | samtools view -F 1284 -c > ./data/targeted_coverage_enrichment/cDNA/Q3_targeted_on_target.txt&
+
+# targeted cDNA - total
+samtools view -F 1284 ./scnanoseq/results_targeted/D0/bam/dedup/D0.dedup.sorted.merged.bam -c > ./data/targeted_coverage_enrichment/cDNA/D0_targeted_total.txt&
+samtools view -F 1284 ./scnanoseq/results_targeted/Q1/bam/dedup/Q1.dedup.sorted.merged.bam -c > ./data/targeted_coverage_enrichment/cDNA/Q1_targeted_total.txt&
+samtools view -F 1284 ./scnanoseq/results_targeted/Q2/bam/dedup/Q2.dedup.sorted.merged.bam -c > ./data/targeted_coverage_enrichment/cDNA/Q2_targeted_total.txt&
+samtools view -F 1284 ./scnanoseq/results_targeted/Q3/bam/dedup/Q3.dedup.sorted.merged.bam -c > ./data/targeted_coverage_enrichment/cDNA/Q3_targeted_total.txt&
+```
+
+## Load data
+
+First we load the data. These files
+```{r load data, echo = FALSE}
+# List files
+DNA = list.files("./data/targeted_coverage_enrichment/DNA",
+								 full.names = TRUE)
+
+cDNA = list.files("./data/targeted_coverage_enrichment/cDNA",
+									full.names = TRUE)
+
+# Read in files
+DNA_coverage = pblapply(DNA, function(x) {
+	dt = fread(x)
+	setnames(dt, "V1", "coverage")
+	
+	dt[, timepoint := gsub("_.*", "", basename(x))]
+	dt[, method := gsub("^[^_]*_([^_]*)_.*$", "\\1", basename(x))]
+	dt[, type := ifelse(grepl("on_target", basename(x)), "on_target", "total")]
+}) |> rbindlist()
+
+DNA_coverage = dcast(DNA_coverage, timepoint + method ~ type, value.var = "coverage")
+DNA_coverage[, coverage := on_target / total]
+
+# Calculate fold enrichment per timepoint
+DNA_coverage_enrichment = dcast(DNA_coverage, timepoint ~ method, value.var = "coverage")
+DNA_coverage_enrichment[, fold_enrichment := targeted / untargeted]
+
+cDNA_coverage = pblapply(cDNA, function(x) {
+	dt = fread(x)
+	setnames(dt, "V1", "coverage")
+	
+	dt[, timepoint := gsub("_.*", "", basename(x))]
+	dt[, method := gsub("^[^_]*_([^_]*)_.*$", "\\1", basename(x))]
+	dt[, type := ifelse(grepl("on_target", basename(x)), "on_target", "total")]
+}) |> rbindlist()
+
+cDNA_coverage = dcast(cDNA_coverage, timepoint + method ~ type, value.var = "coverage")
+cDNA_coverage[, coverage := on_target / total]
+```
+
+## Calculate fold enrichment
+
+```{r calculate fold enrichment, echo = FALSE}
+# Calculate fold enrichment per timepoint
+cDNA_coverage_enrichment = dcast(cDNA_coverage, timepoint ~ method, value.var = "coverage")
+cDNA_coverage_enrichment[, fold_enrichment := targeted / untargeted]
+```
+
+```{r plot fold enrichment, echo = FALSE, fig.width = 8, fig.height = 4}
+# Plot cDNA coverage
+cDNA_coverage[, color_by := paste0(timepoint, "_", method)]
+ggplot(cDNA_coverage, aes(x = timepoint, y = coverage * 1e6, fill = timepoint, alpha = method)) +
+	geom_col(position = "dodge") +
+	scale_fill_manual(values = timepoints_cols) +
+	scale_alpha_manual(values = c("targeted" = 1, "untargeted" = 0.5)) +
+	labs(x = "Timepoint", y = "On-target coverage\nper million reads (cDNA)", alpha = "Method") +
+	scale_y_log10(breaks = scales::trans_breaks("log10", function(x) 10^x, n = 5), 
+								expand = c(0, 0), labels = scales::comma_format()) +
+	guides(fill = "none")
+
+# Plot DNA coverage
+DNA_coverage[, color_by := paste0(timepoint, "_", method)]
+ggplot(DNA_coverage, aes(x = timepoint, y = coverage * 1e6, fill = timepoint, alpha = method)) +
+	geom_col(position = "dodge") +
+	scale_fill_manual(values = timepoints_cols) +
+	scale_alpha_manual(values = c("targeted" = 1, "untargeted" = 0.5)) +
+	labs(x = "Timepoint", y = "On-target coverage\nper million reads (DNA)", alpha = "Method") +
+	scale_y_log10(breaks = scales::trans_breaks("log10", function(x) 10^x, n = 5), 
+								expand = c(0, 0), labels = scales::comma_format()) +
+	guides(fill = "none")
+```
