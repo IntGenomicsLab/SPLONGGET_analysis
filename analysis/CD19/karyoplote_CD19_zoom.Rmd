@@ -1,0 +1,41 @@
+# CD19 locus
+
+Here we will plot the zoom in of ASCAT results to highlight the CD19 loss in Q3.
+
+```{r set up, warning = FALSE, message = FALSE}
+# Source setup file including all required packages and functions
+source("./functions/setup.R")
+```
+
+### Load in data
+
+First load in ASCAT data.
+
+```{r load in data}
+# Load in ASCAT data
+ascat = fread("./data/ASCAT/Q3.segments.txt")
+```
+
+Subset to chromosome 16 and prepare GRanges.
+
+```{r preprocessing}
+ascat_chr16 = ascat[chr == "16"]
+
+ascat_chr16[, chr := paste0("chr", chr)]
+ascat_gr = makeGRangesFromDataFrame(ascat_chr16, start.field = "startpos", end.field = "endpos", keep.extra.columns = TRUE)
+
+# CD19 pos
+cd19 = makeGRangesFromDataFrame(data.frame(chr = "chr16", start = 28931971, end = 28939342))
+```
+
+### Plot Copy number
+
+```{r plot copy number}
+kp = plotKaryotype(genome = "hg38", chromosomes = "chr16")
+kpSegments(kp, data = ascat_gr, y0 = ascat_gr$nMajor, y1 = ascat_gr$nMajor,
+					 col = "red", lwd = 10, r0 = 0.1, r1 = 1.1, ymax = 2)
+kpSegments(kp, data = ascat_gr, y0 = ascat_gr$nMinor - 0.05, y1 = ascat_gr$nMinor - 0.05,
+					 col = "blue", lwd = 10, r0 = 0.1, r1 = 1.1, ymax = 2)
+kpAxis(kp, numticks = 3, tick.pos = c(0, 0.5, 1), labels = c(0, 1, 2), r0 = 0.1, r1 = 1.1)
+kpPlotMarkers(kp, data = cd19, labels = "CD19")
+```

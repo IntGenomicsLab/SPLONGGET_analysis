@@ -1,0 +1,76 @@
+# CART genome integrations
+
+Here we will plot where CAR T constructs are integrated in the genome.
+
+```{r set up, warning = FALSE, message = FALSE}
+# Source setup file including all required packages and functions
+source("./functions/setup.R")
+```
+
+### Get CART supplementary reads alignments
+
+First we run the following bash scripts to get all the primary (CAR construct) and supplementary (integration site) alignment locations.
+
+```{bash get CART reads, eval = FALSE}
+samtools view -F 0x400 ./data/scdnalong/results_ref_carT_contig_deduped/Q3/bam/dedup/Q3.dedup.sorted.bam CTL019_6k | \
+awk 'BEGIN{OFS="\t"} !/^@/ {
+    if (match($0, /SA:Z:([^,]+),([0-9]+),/, m)) {
+        print $1, $3, $4, m[1], m[2];
+    }
+}' > ./data/CART/supplreads_coordinates_untargeted.tsv
+```
+
+
+### Load in data
+
+First load in the previously generated coordinate file.
+
+```{r load in data}
+dt = fread("./data/CART/supplreads_coordinates_untargeted.tsv")
+cytobands = read.cytoband(species = "hg38")
+```
+
+### Preprocess data
+
+Then prepare data for plotting
+
+```{r preprocess data}
+# Remove rows where supplementary is same contig
+dt = dt[V2 != V4, ]
+dt = dt[!grepl("decoy", V4) & !grepl("chrUn", V4), ]
+
+
+# Prepare dataframes
+primary = dt[, .(chr = V2, start = V3, end = V3, sample = V1)]
+supplementary = dt[, .(chr = V4, start = V5, end = V5, sample = V1)]
+
+chroms = unique(c(primary$chr, supplementary$chr))
+chroms = gtools::mixedsort(chroms)
+
+# Prepare cytobands
+setDT(cytobands$df)
+cytobands_dt = cytobands$df[V1 %in% chroms, ]
+
+CAR_Contig = data.table(V1 = "CTL019_6k", V2 = 0, V3 = 5406, V4 = "CTL019", V5 = "gneg")
+
+final_cytobands = rbind(cytobands_dt, CAR_Contig)
+
+# Make custom sector width to increase CTL019_6k sector size
+xrange = c(cytobands$chr.len, CTL019_6k = final_cytobands[V1 == "CTL019_6k", V3])
+xrange = xrange[chroms]
+
+normal_chr_index = seq_along(xrange) - 1
+zoomed_chr_index = length(xrange)
+sector.width = c(xrange[normal_chr_index] / sum(xrange[normal_chr_index]),
+								 xrange[zoomed_chr_index] / sum(xrange[zoomed_chr_index]) / 14)
+```
+
+### Plot UMAP
+
+Finally we plot the UMAP with CART status.
+
+```{r plot circos}
+circos.par("start.degree" = 90)
+circos.initializeWithIdeogram(final_cytobands, sector.width = sector.width, chromosome.index = chroms)
+circos.genomicLink(primary, supplementary)
+```

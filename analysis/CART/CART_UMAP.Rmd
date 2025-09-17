@@ -1,0 +1,125 @@
+# CART UMAP
+
+Here we will plot the cells with CART constructs on the UMAP.
+
+```{r set up, warning = FALSE, message = FALSE}
+# Source setup file including all required packages and functions
+source("./functions/setup.R")
+```
+
+### Get CART reads alignments
+
+First we run the following bash scripts to get all the reads that align to the CART construct. Before this `scdnalong` and `scnanoseq` have been run with the altered reference genome with added CAR contig.
+
+```{bash get CART reads, eval = FALSE}
+# Get all barcodes from CTL019_6k contig
+samtools view -F 256 -q 50 ./data/scdnalong/results_ref_carT_contig_deduped/Q3/bam/dedup/Q3.dedup.sorted.bam CTL019_6k | awk 'BEGIN {FS="\t"} {for(i=1;i<=NF;i++) if($i ~ /^CB:Z:/) {split($i, a, ":"); print a[3]}}' | sort | uniq -c > ./data/CART/CART_reads_alignments/Q3_barcodes_CART_DNA_mapq50.txt&
+samtools view -F 256 -q 50 ./data/scdnalong/results_ref_carT_contig_deduped/Q2/bam/dedup/Q2.dedup.sorted.bam CTL019_6k | awk 'BEGIN {FS="\t"} {for(i=1;i<=NF;i++) if($i ~ /^CB:Z:/) {split($i, a, ":"); print a[3]}}' | sort | uniq -c > ./data/CART/CART_reads_alignments/Q2_barcodes_CART_DNA_mapq50.txt&
+samtools view -F 256 -q 50 ./data/scdnalong/results_ref_carT_contig_deduped/Q1/bam/dedup/Q1.dedup.sorted.bam CTL019_6k | awk 'BEGIN {FS="\t"} {for(i=1;i<=NF;i++) if($i ~ /^CB:Z:/) {split($i, a, ":"); print a[3]}}' | sort | uniq -c > ./data/CART/CART_reads_alignments/Q1_barcodes_CART_DNA_mapq50.txt&
+samtools view -F 256 -q 50 ./data/scdnalong/results_ref_carT_contig_deduped/D0/bam/dedup/D0.dedup.sorted.bam CTL019_6k | awk 'BEGIN {FS="\t"} {for(i=1;i<=NF;i++) if($i ~ /^CB:Z:/) {split($i, a, ":"); print a[3]}}' | sort | uniq -c > ./data/CART/CART_reads_alignments/D0_barcodes_CART_DNA_mapq50.txt&
+
+# Same for cDNA
+samtools view -F 1280 -q 50 ./data/scnanoseq/results_ref_carT_contig/Q3/bam/dedup/Q3.dedup.sorted.bam CTL019_6k | awk 'BEGIN {FS="\t"} {for(i=1;i<=NF;i++) if($i ~ /^CB:Z:/) {split($i, a, ":"); print a[3]}}' | sort | uniq -c > ./data/CART/CART_reads_alignments/Q3_barcodes_CART_cDNA_mapq50.txt&
+samtools view -F 1280 -q 50 ./data/scnanoseq/results_ref_carT_contig/Q2/bam/dedup/Q2.dedup.sorted.bam CTL019_6k | awk 'BEGIN {FS="\t"} {for(i=1;i<=NF;i++) if($i ~ /^CB:Z:/) {split($i, a, ":"); print a[3]}}' | sort | uniq -c > ./data/CART/CART_reads_alignments/Q2_barcodes_CART_cDNA_mapq50.txt&
+samtools view -F 1280 -q 50 ./data/scnanoseq/results_ref_carT_contig/Q1/bam/dedup/Q1.dedup.sorted.bam CTL019_6k | awk 'BEGIN {FS="\t"} {for(i=1;i<=NF;i++) if($i ~ /^CB:Z:/) {split($i, a, ":"); print a[3]}}' | sort | uniq -c > ./data/CART/CART_reads_alignments/Q1_barcodes_CART_cDNA_mapq50.txt&
+samtools view -F 1280 -q 50 ./data/scnanoseq/results_ref_carT_contig/D0/bam/dedup/D0.dedup.sorted.bam CTL019_6k | awk 'BEGIN {FS="\t"} {for(i=1;i<=NF;i++) if($i ~ /^CB:Z:/) {split($i, a, ":"); print a[3]}}' | sort | uniq -c > ./data/CART/CART_reads_alignments/D0_barcodes_CART_cDNA_mapq50.txt&
+
+```
+
+
+### Load in data
+
+First load in Multiome anndata, barcodes, and CART reads alignments
+
+```{r load in data}
+# Load in Multiome data
+multiome = schard::h5ad2seurat("./data/multiome_adata_04072025.h5ad")
+
+# Load in barcode matching
+dna_barcodes = fread("./data/cellranger_arc_atac.737K-arc-v1.txt.gz", header = FALSE)
+rna_barcodes = fread("./data/cellranger_arc_rna.737K-arc-v1.txt.gz", header = FALSE)
+
+# Load in barcodes
+untargeted_DNA_files = list.files("./data/CART/CART_reads_alignments",
+														pattern = "_DNA_mapq50.txt", full.names = TRUE)
+untargeted_cDNA_files = list.files("./data/CART/CART_reads_alignments",
+														pattern = "_cDNA_mapq50.txt", full.names = TRUE)
+```
+
+### Preprocess data
+
+Then we get all the relevant barcodes and add metadata.
+
+```{r preprocess data}
+# Barcode matching
+matched_barcodes = cbind(dna_barcodes, rna_barcodes)
+setnames(matched_barcodes, c("atac_barcode", "cDNA_barcode"))
+
+# Read in barcodes
+untargeted_DNA = lapply(untargeted_DNA_files, function(x) {
+	dt = fread(x)
+	if (nrow(dt) == 0) {
+		return(NULL)
+	} else {
+		dt[, timepoint := gsub("_.*", "", basename(x))]
+		dt[, type := "untargeted"]
+		dt[, modality := "DNA"]
+		return(dt)
+	}
+}) |> rbindlist()
+
+untargeted_cDNA = lapply(untargeted_cDNA_files, function(x) {
+	dt = fread(x)
+	if (nrow(dt) == 0) {
+		return(NULL)
+	} else {
+		dt[, timepoint := gsub("_.*", "", basename(x))]
+		dt[, type := "untargeted"]
+		dt[, modality := "cDNA"]
+		return(dt)
+	}
+}) |> rbindlist()
+```
+
+Combine with cell embeddings.
+
+```{r combine data}
+# Get UMAP
+cell_embeddings = data.table(multiome@reductions$Xumap_@cell.embeddings)
+cell_embeddings[, sample := rownames(multiome@reductions$Xumap_@cell.embeddings)]
+
+# Adjust barcodes
+untargeted_DNA = merge(untargeted_DNA, matched_barcodes, by.x = "V2", by.y = "atac_barcode", all.x = TRUE)
+untargeted_DNA[, cDNA_barcode := paste0(cDNA_barcode, "-", timepoint)]
+untargeted_DNA[, untargeted_dna_counts := V1]
+
+untargeted_cDNA[, cDNA_barcode := paste0(V2, "-", timepoint)]
+untargeted_cDNA[, untargeted_cdna_counts := V1]
+
+total = merge(untargeted_DNA, untargeted_cDNA, by = "cDNA_barcode", all = TRUE)
+
+# Set CART status
+total[untargeted_dna_counts >= 1, untargeted_dna_CART_status := "CART"]
+total[untargeted_cdna_counts >= 1, untargeted_cdna_CART_status := "CART"]
+total[untargeted_dna_CART_status == "CART" & untargeted_cdna_CART_status == "CART", CART_status := "Detected in both"]
+total[is.na(untargeted_dna_CART_status) & untargeted_cdna_CART_status == "CART", CART_status := "Detected in cDNA"]
+total[untargeted_dna_CART_status == "CART" & is.na(untargeted_cdna_CART_status), CART_status := "Detected in DNA"]
+
+# Merge with cell embeddings
+total_umap = merge(cell_embeddings, total, by.y = "cDNA_barcode", by.x = "sample", all.x = TRUE)
+total_umap[is.na(CART_status), CART_status := "Not detected"]
+```
+
+### Plot UMAP
+
+Finally we plot the UMAP with CART status.
+
+```{r plot UMAP}
+ggplot(total_umap, aes(x = Xumap_1, y = Xumap_2, fill = CART_status)) +
+	geom_point(data = total_umap[CART_status == "Not detected"], aes(x = Xumap_1, y = Xumap_2), size = 0.5, color = "lightgrey") +
+	geom_point(data = total_umap[CART_status == "Detected in DNA"], aes(x = Xumap_1, y = Xumap_2), color = "#3994c9", size = 1) +
+	geom_point(data = total_umap[CART_status == "Detected in cDNA"], aes(x = Xumap_1, y = Xumap_2), color = "#e7ac3d", size = 1) +
+	geom_point(data = total_umap[CART_status == "Detected in both"], aes(x = Xumap_1, y = Xumap_2), color = "red", size = 1) +	
+	scale_color_manual(values = c("#lightgrey", "#3994c9", "#e7ac3d", "red")) +
+	labs(y = "UMAP 1", x = "UMAP 2", fill = "CAR T detection")
+```

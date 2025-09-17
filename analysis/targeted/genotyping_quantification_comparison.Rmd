@@ -1,0 +1,196 @@
+# Genotyping quantification
+
+Here we will show the scripts and commands used to quantify genotyping results from the single-cell long-read data.
+
+```{r set up, warning = FALSE, message = FALSE}
+# Source setup file including all required packages and functions
+source("./functions/setup.R")
+```
+
+### Load in data
+
+```{r load in data}
+# Get barcodes
+dna_barcodes = fread("/staging/leuven/res_00001/barcodes/cellranger_arc_atac.737K-arc-v1.txt", header = FALSE)
+rna_barcodes = fread("/staging/leuven/res_00001/barcodes/cellranger_arc_rna.737K-arc-v1.txt", header = FALSE)
+matched_barcodes = cbind(dna_barcodes, rna_barcodes)
+setnames(matched_barcodes, c("atac_barcode", "cDNA_barcode"))
+
+# Load in whitelists
+cells_doublets = fread("/staging/leuven/stg_00096/home/meftyc/projects/multiome/barcode_doublet.tsv")
+
+# Load in genotyping data
+# cDNA
+vcf_files_cDNA_untargeted = list.files("/staging/leuven/stg_00096/home/projects/2023_Cools_B-ALL/scnanoseq/cellsnp_untargeted",
+														pattern = "cellSNP.cells.vcf.gz", full.names = TRUE, recursive = TRUE)
+vcf_files_cDNA_targeted = list.files("/staging/leuven/stg_00096/home/projects/2023_Cools_B-ALL/scnanoseq/cellsnp",
+														pattern = "cellSNP.cells.vcf.gz", full.names = TRUE, recursive = TRUE)
+
+# DNA
+vcf_files_DNA_untargeted = list.files("/staging/leuven/stg_00096/home/projects/2023_Cools_B-ALL/scdnalong/cellsnp_deduped_untargeted",
+													 pattern = "cellSNP.cells.vcf.gz", full.names = TRUE, recursive = TRUE)
+vcf_files_DNA_targeted = list.files("/staging/leuven/stg_00096/home/projects/2023_Cools_B-ALL/scdnalong/cellsnp_deduped",
+													 pattern = "cellSNP.cells.vcf.gz", full.names = TRUE, recursive = TRUE)
+```
+
+### Preprocessing
+
+Specify variant targets and preprocess cell doublets.
+
+```{r preprocessing doublets}
+# Variant targets
+targets = data.table(variants = c("12:112450395", "4:1961074",
+                                  "13:28028203", "1:114716126",
+                                  "1:114716123", "12:112450406",
+                                  "12:25225628", "12:25245347",
+                                  "16:28935555", "16:28935556",
+                                  "16:28936152"),
+                     variant_name = c("PTPN11-A72V", "NSD2-E1099K",
+                                      "FLT3-N676K", "NRAS-G12D",
+                                      "NRAS-G13D", "PTPN11-E76Q",
+                                      "KRAS-C_T", "KRAS-G13D",
+                                      "CD19-1_G_A", "CD19-2_T_C",
+                                      "CD19-3_G_T"))
+
+# Get atac barcodes in cells_doublets
+cells_doublets[, timepoint := gsub(".*-", "", V1)]
+cells_doublets[, cDNA_barcode := gsub("-.*", "", V1)]
+cells_doublets = merge(cells_doublets, matched_barcodes, by = "cDNA_barcode", all.x = TRUE)
+cells_doublets[, atac_barcode := paste0(atac_barcode, "-", timepoint)]
+```
+
+Define function to extract all relevant information from the vcf files.
+
+```{r extract info from vcf}
+# Function to extract information out vcf.
+getGenotyping = function(vcf_file) {
+  vcf = fread(vcf_file, skip = "#CHROM", header = TRUE)
+  #vcf = vcf[grepl(paste0(targets$variants, collapse = "|"), paste0(vcf$`#CHROM`, ":", vcf$POS)), ]
+
+  # Get the list of sample column names (assuming they start from the 10th column)
+  sample_columns = colnames(vcf)[10:ncol(vcf)]
+
+  # Initialize a list to store results
+  mut_dt = pblapply(seq_len(nrow(vcf)), function(i) {
+    # Extract the current row
+    row_data = vcf[i, ..sample_columns]
+
+    # Identify matching sample columns for genotypes '1/1', '0/1', '1/0'
+    covered_mut = sample_columns[grepl("0/0", as.character(unlist(row_data)))]
+    has_mut = sample_columns[grepl("1/1|0/1|1/0", as.character(unlist(row_data)))]
+
+    dt = lapply(c(covered_mut, has_mut), function(x) {
+      data.table(
+        sample = x,
+        variant_id = paste0(vcf[i, `#CHROM`], ":", vcf[i, POS]),
+        genotype = gsub("^([^:]*):.*$", "\\1", vcf[i, ..x]),
+        alt_depth = as.numeric(gsub("^([^:]*):([^:]*):.*$", "\\2", vcf[i, ..x])),
+        total_depth = as.numeric(gsub("^([^:]*):([^:]*):([^:]*):.*$", "\\3", vcf[i, ..x])))
+    }) |> rbindlist()
+    return(dt)
+  }, cl = 12)
+  
+  dt = rbindlist(mut_dt)
+  dt[, timepoint := basename(gsub("/cellSNP.*", "", vcf_file))]
+  dt[, barcode := paste0(sample, "-", timepoint)]
+  return(dt)
+}
+```
+
+Loop through all vcf files and process data
+
+```{r process all vcf files}
+# Loop through vcf files and get genotypes
+res_cDNA_untargeted = pblapply(vcf_files_cDNA_untargeted, getGenotyping, cl = 4) |> rbindlist()
+res_cDNA_targeted = pblapply(vcf_files_cDNA_targeted, getGenotyping, cl = 4) |> rbindlist()
+res_DNA_untargeted = pblapply(vcf_files_DNA_untargeted, getGenotyping, cl = 4) |> rbindlist()
+res_DNA_targeted = pblapply(vcf_files_DNA_targeted, getGenotyping, cl = 4) |> rbindlist()
+
+# Get matching barcodes
+res_DNA_untargeted = merge(res_DNA_untargeted, matched_barcodes, 
+                           by.x = "sample", by.y = "atac_barcode", all.x = TRUE)
+res_DNA_targeted = merge(res_DNA_targeted, matched_barcodes, 
+                         by.x = "sample", by.y = "atac_barcode", all.x = TRUE)
+
+# Get cDNA barcodes
+res_DNA_untargeted[, barcode := paste0(cDNA_barcode, "-", timepoint)]
+res_DNA_targeted[, barcode := paste0(cDNA_barcode, "-", timepoint)]
+
+# Add type and rbind everything
+res_cDNA_untargeted[, type := "cDNA_untargeted"]
+res_cDNA_targeted[, type := "cDNA_targeted"]
+res_DNA_untargeted[, type := "DNA_untargeted"]
+res_DNA_targeted[, type := "DNA_targeted"]
+res = rbindlist(list(res_cDNA_untargeted, res_cDNA_targeted,
+                     res_DNA_untargeted[, -c("cDNA_barcode")],
+                     res_DNA_targeted[, -c("cDNA_barcode")]))
+
+# Merge with target information
+res = merge(res, targets, by.x = "variant_id", by.y = "variants", all.x = TRUE)
+
+# Remove cells from doublet list
+res = res[!barcode %in% cells_doublets[doublet_outlier == TRUE, V1]]
+
+# Add cells from all barcodes
+all_barcodes = CJ(barcode = cells_doublets[doublet_outlier == FALSE, V1],
+                  variant_name = targets$variant_name,
+                  type = c("cDNA_untargeted", "cDNA_targeted", "DNA_untargeted", "DNA_targeted"))
+
+res = merge(res, all_barcodes, by = c("barcode", "variant_name", "type"), all.y = TRUE)
+
+# Remove KRAS-C_T and cD19 variants
+res = res[!grepl("CD19|KRAS-C_T", variant_name)]
+
+# Fill NAs
+res[is.na(total_depth), total_depth := 0]
+res[is.na(alt_depth), alt_depth := 0]
+res[is.na(timepoint), timepoint := gsub(".*-", "", barcode)]
+
+# Quantification
+res[grepl("^DNA", type), power := ifelse(total_depth >= 2, "yes", "no")]
+res[grepl("^cDNA", type), power := ifelse(total_depth >= 3, "yes", "no")]
+
+res[grepl("^DNA", type), presence := ifelse(genotype %in% c("1/1", "0/1", "1/0") & alt_depth >= 2, "1", "0")]
+res[grepl("^cDNA", type), presence := ifelse(genotype %in% c("1/1", "0/1", "1/0") & alt_depth >= 3, "1", "0")]
+
+res[power == "no", detection := "No power"]
+res[power == "yes", detection := ifelse(presence == "1", "Detected", "Not detected")]
+res[, detection := factor(detection, levels = c("No power", "Detected", "Not detected"))]
+
+# Get number of cells per timepoint
+number_of_cells = unique(res, by = "barcode")[, .(number_of_cells = .N), by = timepoint]
+
+# Calculate percentage of power cells
+res_power = res[power == "yes", .N, by = .(timepoint, variant_name, type)]
+res_power = merge(res_power, number_of_cells, by = "timepoint", all.x = TRUE)
+res_power[, fraction := N / number_of_cells]
+res_power = dcast(res_power, timepoint + variant_name ~ type, value.var = "fraction", fill = 0)
+res_power = melt(res_power, id.vars = c("timepoint", "variant_name"), variable.name = "type", value.name = "fraction")
+res_power = dcast(res_power, type + variant_name ~ timepoint, value.var = "fraction", fill = 0)
+res_power = melt(res_power, id.vars = c("type", "variant_name"), variable.name = "timepoint", value.name = "fraction")
+
+# Get mean and min/max without CD19
+res_power_nocd19 = res_power[!grepl("CD19", variant_name)]
+res_power_nocd19[, targeted := ifelse(grepl("_targeted", type), "Targeted", "Untargeted")]
+summary = res_power_nocd19[, .(mean_fraction = mean(fraction),
+                               min_fraction = min(fraction),
+                               max_fraction = max(fraction)),
+                           by = .(targeted)]
+
+
+# Get summary statistics per timepoint/variant
+res_power[, type := factor(type, levels = c("cDNA_untargeted", "cDNA_targeted", "DNA_untargeted", "DNA_targeted"))]
+```
+
+### Plot results
+
+```{r plot genotyping quantification}
+ggplot(res_power, aes(x = variant_name, y = fraction, fill = type)) + 
+  facet_wrap(~ timepoint) +
+  geom_col(position = "dodge") +
+  geom_text(aes(label = sprintf("%.1f%%", fraction * 100)), position = position_dodge(width = 0.9),
+            vjust = 0.5, angle = 90, hjust = 0) +
+  scale_fill_brewer(palette = "Paired") +
+  scale_y_continuous(expand = c(0, 0), labels = scales::percent_format(), limits = c(0, 1)) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```

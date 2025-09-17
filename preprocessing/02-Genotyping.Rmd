@@ -1,0 +1,51 @@
+# Genotyping
+
+## Running cellsnp-lite
+
+Both targeted DNA and cDNA libraries are initially processed in exactly the same way as untargeted data, using `scnanoseq` and `scdnalong` (see below). After processing, we use `cellsnp-lite` version 1.2.0 to call genotypes at the positions of interest. The command used is as follows for DNA libraries is:
+```{bash cellsnp, eval = FALSE}
+cellsnp-lite \
+	--samFile ${bamfile} \
+	--barcodeFile ${whitelist} \
+	--regionsVCF ${targets} \
+	--outDir ${outdir} \
+	--refseq ${ref} \
+	--UMItag None \
+	--genotype \
+	--cellTAG CB \
+	--nproc ${SLURM_CPUS_PER_TASK} \
+	--minMAF 0.00001 \
+	--minCOUNT 10 \
+	--gzip
+```
+
+for cDNA libraries:
+```{bash cellsnp cDNA, eval = FALSE}
+cellsnp-lite \
+	--samFile ${bamfile} \
+	--barcodeFile ${whitelist} \
+	--regionsVCF ${targets} \
+	--outDir ${outdir} \
+	--refseq ${ref} \
+	--UMItag UR \
+	--genotype \
+	--cellTAG CB \
+	--nproc ${SLURM_CPUS_PER_TASK} \
+	--minMAF 0.00001 \
+	--minCOUNT 10 \
+	--gzip
+```
+
+Where:
+- `--samFile`: Path to the BAM file (deduplicated, barcode tagged and mapped).
+- `--barcodeFile`: Path to the cell barcode whitelist file, which can be obtained from the `scnanoseq` or `scdnalong` output.
+- `--regionsVCF`: Path to a VCF file containing the variants of interest.
+- `--outDir`: Output directory where the results will be stored.
+- `--refseq`: Path to the reference genome FASTA file.
+- `--UMItag`: The tag used in the BAM file to denote UMIs. For cDNA libraries this is `UR`, for DNA libraries this is `None`.
+- `--genotype`: Indicates that genotyping should be performed.
+- `--cellTAG`: The tag used in the BAM file to denote cell barcodes, which is `CB` for 10X data.
+- `--nproc`: Number of CPU threads to use.
+- `--minMAF`: Minimum minor allele frequency to consider a variant.
+- `--minCOUNT`: Minimum count of reads supporting a variant to consider it for genotyping.
+- `--gzip`: Compress the output files using gzip.

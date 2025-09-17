@@ -8,7 +8,7 @@ source("./functions/setup.R")
 
 ## Load data
 
-```{r load data, echo = FALSE}
+```{r load data}
 # Load in data
 short = schard::h5ad2seurat("./data/multiome_adata_Q3_short_09072025.h5ad")
 long = schard::h5ad2seurat("./data/multiome_adata_Q3_long_09072025.h5ad")
@@ -18,7 +18,7 @@ long = schard::h5ad2seurat("./data/multiome_adata_Q3_long_09072025.h5ad")
 
 First plot for short-read sequencing data
 
-```{r plot UMAPs, echo = FALSE, fig.width = 10, fig.height = 5}
+```{r plot UMAPs, fig.width = 10, fig.height = 5}
 # Get UMAP
 umap_dt_short = data.table(short@reductions$Xumap_@cell.embeddings)
 umap_dt_short[, sample := rownames(short@reductions$Xumap_@cell.embeddings)]
@@ -42,7 +42,7 @@ ggplot(umap_dt_short, aes(x = Xumap_1, y = Xumap_2, color = annotation)) +
 ```
 
 Now for SPLONGGET data
-```{r plot UMAPs long, echo = FALSE, fig.width = 10, fig.height = 5}
+```{r plot UMAPs long, fig.width = 10, fig.height = 5}
 umap_dt_long = data.table(long@reductions$Xumap_@cell.embeddings)
 umap_dt_long[, sample := rownames(long@reductions$Xumap_@cell.embeddings)]
 

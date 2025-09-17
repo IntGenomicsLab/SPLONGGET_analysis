@@ -9,6 +9,8 @@ require(ggdendro)
 require(patchwork)
 require(ggtree)
 require(ggrastr)
+require(karyoploteR)
+require(circlize)
 
 # Data manipulation packages
 require(data.table)

@@ -1,0 +1,101 @@
+# Genotyping quantification comparison
+
+Here we will show the scripts and commands used to plot the genotyping comparison results from the single-cell long-read data.
+
+```{r set up, warning = FALSE, message = FALSE}
+# Source setup file including all required packages and functions
+source("./functions/setup.R")
+```
+
+### Load in data
+
+First load in all the data required.
+```{r load in data}
+# Load in genotyping data
+# cDNA
+vcf_files_cDNA_targeted = list.files("./data/cellsnp/cDNA/",
+														pattern = "cellSNP.cells.vcf.gz",
+														full.names = TRUE, recursive = TRUE)
+
+# DNA
+vcf_files_DNA_targeted = list.files("./data/cellsnp/DNA/",
+													 pattern = "cellSNP.cells.vcf.gz",
+													 full.names = TRUE, recursive = TRUE)
+# VAFs missionbio
+
+missionbio_vafs = fread("./data/variants_missionbio.tsv")
+missionbio_vafs = melt(missionbio_vafs, id.vars = "variant_name", variable.name = "timepoint", value.name = "VAF")
+missionbio_vafs[, VAF := VAF / 100] 
+```
+
+### Preprocessing
+
+Specify variants and preprocess all data
+
+```{r preprocessing}
+# Variant targets
+targets = data.table(variants = c("12:112450395", "4:1961074",
+                                  "13:28028203", "1:114716126",
+                                  "1:114716123", "12:112450406",
+                                  "12:25225628", "12:25245347",
+                                  "16:28935555", "16:28935556",
+                                  "16:28936152"),
+                     variant_name = c("PTPN11-A72V", "NSD2-E1099K",
+                                      "FLT3-N676K", "NRAS-G12D",
+                                      "NRAS-G13D", "PTPN11-E76Q",
+                                      "KRAS-C_T", "KRAS-G13D",
+                                      "CD19-1_G_A", "CD19-2_T_C",
+                                      "CD19-3_G_T"))
+
+getVAF = function(vcf_file) {
+  vcf = fread(vcf_file, skip = "#CHROM", header = TRUE)
+  #vcf = vcf[grepl(paste0(targets$variants, collapse = "|"), paste0(vcf$`#CHROM`, ":", vcf$POS)), ]
+
+  # Get the list of sample column names (assuming they start from the 10th column)
+  sample_columns = colnames(vcf)[10:ncol(vcf)]
+	
+	# Get AD and DP
+	vcf[, AD := as.numeric(gsub(";.*|AD=", "", INFO))]
+	vcf[, DP := as.numeric(gsub(";OTH.*|.*DP=", "", INFO))]
+	vcf[, VAF := AD / DP]
+
+	return(data.table(variant_id = paste0(vcf[, `#CHROM`], ":", vcf[, POS]),
+										VAF = vcf[, VAF],
+										timepoint = basename(gsub("/cellSNP.*", "", vcf_file))))
+}
+
+res_cDNA = lapply(vcf_files_cDNA_targeted, getVAF) |> rbindlist()
+res_cDNA[, type := "cDNA_targeted"]
+
+res_DNA = lapply(vcf_files_DNA_targeted, getVAF) |> rbindlist()
+res_DNA[, type := "DNA_targeted"]
+
+res = rbind(res_cDNA, res_DNA)
+
+# Merge with targets and remove CD19 and KRAS-C_T
+res = merge(res, targets, by.x = "variant_id", by.y = "variants", all.x = TRUE)
+res = res[!grepl("CD19|KRAS-C_T", variant_name)]
+
+# Merge with missionbio VAFs
+res = merge(res, missionbio_vafs, by = c("variant_name", "timepoint"), all.x = TRUE, suffixes = c("_SPLONGGET", "_missionbio"))
+
+```
+
+### Plot UMAPs with genotyping results
+
+```{r plot umaps, fig.width = 10, fig.height = 5}
+ggplot(data = res, aes(x = VAF_missionbio, y = VAF_SPLONGGET, color = type)) +
+	geom_point(size = 4) +
+	stat_cor(method = "pearson") +
+	geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey") +
+	geom_smooth(method = "lm", se = FALSE, linetype = "dashed", size = 1.5) +
+	labs(x = "VAF MissionBio", y = "VAF Targeted SPLONGGET") +
+	scale_color_brewer(palette = "Set1")
+  
+ggplot(data = res, aes(x = VAF_missionbio, y = VAF_SPLONGGET)) +
+	geom_point(size = 4) +
+	stat_cor(method = "pearson") +
+	geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey") +
+	geom_smooth(method = "lm", se = FALSE, colour = "red", linetype = "dashed", size = 1.5) +
+	labs(x = "VAF MissionBio", y = "VAF Targeted SPLONGGET")
+```

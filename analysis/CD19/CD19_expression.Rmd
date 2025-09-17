@@ -1,0 +1,45 @@
+# CD19 locus
+
+Here we will plot the zoom in of ASCAT results to highlight the CD19 loss in Q3.
+
+```{r set up, warning = FALSE, message = FALSE}
+# Source setup file including all required packages and functions
+source("./functions/setup.R")
+```
+
+### Load in data
+
+First load in ASCAT data.
+
+```{r load in data}
+# Load in ASCAT data
+multiome = schard::h5ad2seurat("./data/multiome_adata_04072025.h5ad")
+```
+
+### Preprocessing
+
+```{r preprocessing}
+# Get UMAP coordinates
+cell_embeddings = data.table(multiome@reductions$Xumap_@cell.embeddings)
+cell_embeddings[, sample := rownames(multiome@reductions$Xumap_@cell.embeddings)]
+
+# Get CD19 expression
+cd19 = data.table(CD19 = multiome@assays$RNA@data["CD19", ])
+cd19[, sample := colnames(multiome@assays$RNA@data)]
+
+# Merge
+dt = merge(cell_embeddings, cd19, by = "sample", all.x = TRUE)
+```
+
+
+### Plot
+
+```{r plot CD19 expression}
+ggplot(dt, aes(x = Xumap_1, y = Xumap_2, color = CD19)) +
+	geom_point(size = .5) +
+	#scale_color_viridis_c(limits = c(0, 1), oob=scales::oob_squish, direction = 1) +
+	scale_color_gradient(low = "lightgrey", high = "red") +
+	theme_cowplot() +
+	labs(x = "UMAP 1", y = "UMAP 2", color = "CD19 expression") + 
+	theme(legend.key.size = unit(.5, "cm"))
+```

@@ -1,0 +1,10 @@
+File showing all versioning of R packages used in this analysis.
+
+```{r set up, warning = FALSE, message = FALSE}
+# Source setup file including all required packages and functions
+source("./functions/setup.R")
+```
+
+```{r session info}
+sessioninfo::session_info()
+```

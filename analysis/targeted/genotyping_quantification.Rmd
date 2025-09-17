@@ -1,0 +1,201 @@
+# Genotyping quantification
+
+Here we will show the scripts and commands used to plot the genotyping results from the single-cell long-read data.
+
+```{r set up, warning = FALSE, message = FALSE}
+# Source setup file including all required packages and functions
+source("./functions/setup.R")
+```
+
+### Load in data
+
+First load in all the data required.
+```{r load in data}
+# Load in whitelists
+cell_barcodes = fread("./data/barcode_celltype.csv", header = TRUE)
+cells_doublets = fread("./data/barcode_doublet.tsv")
+
+DNA_barcodes = cell_barcodes[`atac:atac_barcode` != ""]
+DNA_barcodes[, barcode := paste0(`atac:atac_barcode`, "-", gsub(".*-", "", V1))]
+cDNA_barcodes = cell_barcodes[`rna:rna_barcode` != ""]
+cDNA_barcodes[, barcode := paste0(`rna:rna_barcode`, "-", gsub(".*-", "", V1))]
+
+# cDNA
+vcf_files_cDNA = list.files("./data/cellsnp/cDNA/",
+														pattern = "cellSNP.cells.vcf.gz",
+														full.names = TRUE, recursive = TRUE)
+
+# DNA
+vcf_files_DNA = list.files("./data/cellsnp/DNA/",
+													 pattern = "cellSNP.cells.vcf.gz",
+													 full.names = TRUE, recursive = TRUE)
+```
+
+### Preprocessing
+
+Specify variants and preprocess all data
+
+```{r preprocessing}
+# Variant targets
+targets = data.table(variants = c("12:112450395", "4:1961074",
+                                  "13:28028203", "1:114716126",
+                                  "1:114716123", "12:112450406",
+                                  "12:25225628", "12:25245347",
+                                  "16:28935555", "16:28935556",
+                                  "16:28936152"),
+                     variant_name = c("PTPN11-A72V", "NSD2-E1099K",
+                                      "FLT3-N676K", "NRAS-G12D",
+                                      "NRAS-G13D", "PTPN11-E76Q",
+                                      "KRAS-C_T", "KRAS-G13D",
+                                      "CD19-1_G_A", "CD19-2_T_C",
+                                      "CD19-3_G_T"))
+
+
+# Get all combinations of targets and barcodes
+cDNA_cells_expanded = CJ(barcode = cDNA_barcodes$barcode, variant_name = targets$variant_name)
+DNA_cells_expanded = CJ(barcode = DNA_barcodes$barcode, variant_name = targets$variant_name)
+
+# Loop through vcf files and get genotypes
+res_cDNA = lapply(vcf_files_cDNA, function(vcf_file) {
+  vcf = fread(vcf_file)
+  #vcf = vcf[grepl(paste0(targets$variants, collapse = "|"), paste0(vcf$`#CHROM`, ":", vcf$POS)), ]
+
+  # Get the list of sample column names (assuming they start from the 10th column)
+  sample_columns = colnames(vcf)[10:ncol(vcf)]
+
+  # Initialize a list to store results
+  mut_dt = pblapply(seq_len(nrow(vcf)), function(i) {
+    # Extract the current row
+    row_data = vcf[i, ..sample_columns]
+
+    # Identify matching sample columns for genotypes '1/1', '0/1', '1/0'
+    covered_mut = sample_columns[grepl("0/0", as.character(unlist(row_data)))]
+    has_mut = sample_columns[grepl("1/1|0/1|1/0", as.character(unlist(row_data)))]
+
+    dt = lapply(c(covered_mut, has_mut), function(x) {
+      data.table(
+        sample = x,
+        variant_id = paste0(vcf[i, `#CHROM`], ":", vcf[i, POS]),
+        genotype = gsub("^([^:]*):.*$", "\\1", vcf[i, ..x]),
+        alt_depth = as.numeric(gsub("^([^:]*):([^:]*):.*$", "\\2", vcf[i, ..x])),
+        total_depth = as.numeric(gsub("^([^:]*):([^:]*):([^:]*):.*$", "\\3", vcf[i, ..x])))
+    }) |> rbindlist()
+    return(dt)
+  }, cl = 12)
+  
+  dt = rbindlist(mut_dt)
+  dt[, timepoint := gsub(".*cDNA\\/\\/", "", vcf_file)]
+  dt[, timepoint := gsub("/cellSNP.*", "", timepoint)]
+  return(dt)
+})
+res_cDNA = rbindlist(res_cDNA)
+res_cDNA[, barcode := paste0(sample, "-", timepoint)]
+res_cDNA = merge(res_cDNA, targets, by.x = "variant_id", by.y = "variants", all.x = TRUE)
+
+# Loop through vcf files and get genotypes
+res_DNA = lapply(vcf_files_DNA, function(vcf_file) {
+  vcf = fread(vcf_file)
+  #vcf = vcf[grepl(paste0(targets$variants, collapse = "|"), paste0(vcf$`#CHROM`, ":", vcf$POS)), ]
+
+  # Get the list of sample column names (assuming they start from the 10th column)
+  sample_columns = colnames(vcf)[10:ncol(vcf)]
+
+  # Initialize a list to store results
+  mut_dt = pblapply(seq_len(nrow(vcf)), function(i) {
+    # Extract the current row
+    row_data = vcf[i, ..sample_columns]
+
+    # Identify matching sample columns for genotypes '1/1', '0/1', '1/0'
+    covered_mut = sample_columns[grepl("0/0", as.character(unlist(row_data)))]
+    has_mut = sample_columns[grepl("1/1|0/1|1/0", as.character(unlist(row_data)))]
+
+    dt = lapply(c(covered_mut, has_mut), function(x) {
+      data.table(
+        sample = x,
+        variant_id = paste0(vcf[i, `#CHROM`], ":", vcf[i, POS]),
+        genotype = gsub("^([^:]*):.*$", "\\1", vcf[i, ..x]),
+        alt_depth = as.numeric(gsub("^([^:]*):([^:]*):.*$", "\\2", vcf[i, ..x])),
+        total_depth = as.numeric(gsub("^([^:]*):([^:]*):([^:]*):.*$", "\\3", vcf[i, ..x])))
+    }) |> rbindlist()
+    return(dt)
+  }, cl = 12)
+  
+  dt = rbindlist(mut_dt)
+  dt[, timepoint := gsub(".*DNA\\/\\/", "", vcf_file)]
+  dt[, timepoint := gsub("/cellSNP.*", "", timepoint)]
+  return(dt)
+})
+res_DNA = rbindlist(res_DNA)
+res_DNA[, barcode := paste0(sample, "-", timepoint)]
+res_DNA = merge(res_DNA, targets, by.x = "variant_id", by.y = "variants", all.x = TRUE)
+
+# Add cells from whitelist
+cDNA_merged = merge(res_cDNA, cDNA_cells_expanded, by = c("barcode", "variant_name"), all.y = TRUE)
+DNA_merged = merge(res_DNA, DNA_cells_expanded, by = c("barcode", "variant_name"), all.y = TRUE)
+
+# Remove doublets
+cDNA_merged = cDNA_merged[!barcode %in% cells_doublets[doublet_outlier == TRUE, V1]]
+DNA_merged = DNA_merged[!barcode %in% cells_doublets[doublet_outlier == TRUE, V1]]
+
+# Fill NAs
+cDNA_merged[is.na(total_depth), total_depth := 0]
+cDNA_merged[is.na(alt_depth), alt_depth := 0]
+cDNA_merged[is.na(timepoint), timepoint := gsub(".*-", "", barcode)]
+
+DNA_merged[is.na(total_depth), total_depth := 0]
+DNA_merged[is.na(alt_depth), alt_depth := 0]
+DNA_merged[is.na(timepoint), timepoint := gsub(".*-", "", barcode)]
+
+# Quantification
+cDNA_merged[, power := ifelse(total_depth >= 3, "yes", "no")]
+DNA_merged[, power := ifelse(total_depth >= 2, "yes", "no")]
+
+# Add presence column
+cDNA_merged[, presence := ifelse(genotype %in% c("1/1", "0/1", "1/0") & alt_depth >= 3, "1", "0")]
+DNA_merged[, presence := ifelse(genotype %in% c("1/1", "0/1", "1/0") & alt_depth >= 2, "1", "0")]
+
+# Get frequencies
+cDNA_freqs = cDNA_merged[, .N, by = .(timepoint, variant_name, presence, power)]
+DNA_freqs = DNA_merged[, .N, by = .(timepoint, variant_name, presence, power)]
+
+# Make new columns for detection
+cDNA_freqs[power == "no", detection := "No power"]
+cDNA_freqs[power == "yes", detection := ifelse(presence == "1", "Detected", "Not detected")]
+cDNA_freqs[, detection := factor(detection, levels = c("No power", "Detected", "Not detected"))]
+	
+DNA_freqs[power == "no", detection := "No power"]
+DNA_freqs[power == "yes", detection := ifelse(presence == "1", "Detected", "Not detected")]
+DNA_freqs[, detection := factor(detection, levels = c("No power", "Detected", "Not detected"))]
+
+```
+
+### Plot Genotyping quantification
+
+```{r plot umaps, fig.width = 24, fig.height = 12}
+# Plot per variant
+variants = targets$variant_name
+
+lapply(variants, function(x) {
+	cDNA_subset = cDNA_freqs[variant_name == x]
+	DNA_subset = DNA_freqs[variant_name == x]
+
+	dna_plot = ggplot(DNA_subset, aes(x = timepoint, y = N, fill = detection)) +
+		geom_col(show.legend = TRUE) +
+		labs(title = paste0("DNA Genotyping: ", x), y = "Number of cells", x = "Time point", fill = "") +
+		scale_fill_manual(values = c("No power" = "lightgrey", "Detected" = "red", "Not detected" = "#615e5e"),
+											drop = FALSE) +
+		scale_y_continuous(expand = c(0, 0), labels = scales::comma_format()) +
+		theme(plot.title = element_text(size = 8))
+	
+	cdna_plot = ggplot(cDNA_subset, aes(x = timepoint, y = N, fill = detection)) +
+		geom_col(show.legend = TRUE) +
+		labs(title = paste0("cDNA Genotyping: ", x), y = "Number of cells", x = "Time point", fill = "") +
+		scale_fill_manual(values = c("No power" = "lightgrey", "Detected" = "red", "Not detected" = "#615e5e"),
+											drop = FALSE) +
+		scale_y_continuous(expand = c(0, 0), labels = scales::comma_format()) +
+		theme(plot.title = element_text(size = 8))
+
+	plt = dna_plot + cdna_plot + plot_layout(guides = "collect")
+  plt
+})
+```
