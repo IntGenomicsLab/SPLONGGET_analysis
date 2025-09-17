@@ -9,4 +9,4 @@ file list and description
 - `04_comparison.ipynb` - cell type comparison long read and short read ATAC
 
 The details on environment
-- `preprocessing/atac/requirements_pycistopic.txt` for all the notebooks
+- `../atac/requirements_pycistopic.txt` for all the notebooks
