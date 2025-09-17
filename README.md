@@ -1,7 +1,7 @@
 # SPLONGGET analysis
 
 <p>
-<img src="docs/ikea_splonget.png" alt="SPLONGGET logo" align="left" style="width:100px; margin-right: 20px;"/>
+<img src="docs/ikea_splonget.jpg" alt="SPLONGGET logo" align="left" style="width:200px; margin-right: 20px;"/>
 
 
 The repository with the code used in SPLONGGET paper.
