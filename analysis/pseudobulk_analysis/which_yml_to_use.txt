@@ -1,0 +1,1 @@
+For the Deseq2 and the isochromosome analysis, the RNA_env.yml was used. For the pseudobulk DNA analysis, the DNA_env.yml was used.
