@@ -24,6 +24,7 @@ file list and description
 The details on environment <br>
 - `requirements_snapatac2.txt` for `02_fragment_creation.ipynb`
 - `requirements_pycistopic.txt` for all the other notebooks
+- `requirements_plotting_R_SessionInfo.txt` for `visualise_bigwigs.R` and `visualise_bw_per_cell_type_short_vs_long.R`
 
 
 Input files <br>
