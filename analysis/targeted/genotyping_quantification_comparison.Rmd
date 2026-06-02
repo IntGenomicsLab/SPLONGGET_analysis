@@ -148,10 +148,10 @@ res[is.na(timepoint), timepoint := gsub(".*-", "", barcode)]
 
 # Quantification
 res[grepl("^DNA", type), power := ifelse(total_depth >= 2, "yes", "no")]
-res[grepl("^cDNA", type), power := ifelse(total_depth >= 3, "yes", "no")]
+res[grepl("^cDNA", type), power := ifelse(total_depth >= 2, "yes", "no")]
 
 res[grepl("^DNA", type), presence := ifelse(genotype %in% c("1/1", "0/1", "1/0") & alt_depth >= 2, "1", "0")]
-res[grepl("^cDNA", type), presence := ifelse(genotype %in% c("1/1", "0/1", "1/0") & alt_depth >= 3, "1", "0")]
+res[grepl("^cDNA", type), presence := ifelse(genotype %in% c("1/1", "0/1", "1/0") & alt_depth >= 2, "1", "0")]
 
 res[power == "no", detection := "No power"]
 res[power == "yes", detection := ifelse(presence == "1", "Detected", "Not detected")]

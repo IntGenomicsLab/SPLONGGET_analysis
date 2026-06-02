@@ -142,11 +142,11 @@ dt_cDNA = merge(cell_embeddings, res_cDNA, by.x = "sample", by.y = "barcode", al
 dt_DNA = merge(cell_embeddings, res_DNA, by.x = "sample", by.y = "barcode", all.x = TRUE)
 
 # Quantification
-dt_cDNA[, power := ifelse(total_depth >= 3, "yes", "no")]
+dt_cDNA[, power := ifelse(total_depth >= 2, "yes", "no")]
 dt_DNA[, power := ifelse(total_depth >= 2, "yes", "no")]
 
 # Add presence column
-dt_cDNA[, presence := ifelse(genotype %in% c("1/1", "0/1", "1/0") & alt_depth >= 3, "1", "0")]
+dt_cDNA[, presence := ifelse(genotype %in% c("1/1", "0/1", "1/0") & alt_depth >= 2, "1", "0")]
 dt_DNA[, presence := ifelse(genotype %in% c("1/1", "0/1", "1/0") & alt_depth >= 2, "1", "0")]
 
 # Make wide

@@ -5,115 +5,180 @@ Here we will plot the isoform quantification results from the combined analysis 
 First we load packages. These need to be preinstalled in your R environment. You can find all packages in the `setup.R` file in the `functions` folder.
 Furthermore, we also load functions that help us with plotting and saving.
 
+
+### Merging and collapsing of transcipts
+
+Merging is done using TAMA merge, which is part of the TAMA tool suite. We use the default settings for merging.
+
+```{bash merge isoforms}
+python tama_merge.py \
+    -f ${mergefile} \
+    -p ${outdir}/merged
+
+```
+
+Then we collapse similar transcripts using TAMA collapse, which is also part of the TAMA tool suite. We use the default settings for collapsing, which means that all transcripts that have the same splice junctions and are within 100 bp of each other will be collapsed together. The only thing we specify is the output prefix and the input file, which is the merged file from the previous step.
+
+```{bash collapse isoforms}
+python tama_collapse.py \
+    -b BAM \
+    -s ${bam} \
+    -f ${ref} \
+    -p ${outdir}/B_ALL \
+    -x no_cap 
+```
+
+
+### QC
+
+After obtaining the collapsed transcriptome, we can run SQANTI3 to get QC metrics on the isoform quantification and perform filtering, only retaining high confidence isoform calls.
+For filtering we used an adapted filtering scheme which you can see below.
+
+```{json adapted filter settings}
+{
+    "full-splice_match": [
+        {
+            "perc_A_downstream_TTS":[0,59]
+        }
+    ],
+    "rest": [
+        {
+            "perc_A_downstream_TTS":[0,59],
+            "all_canonical":"canonical",
+            "RTS_stage":"FALSE"
+        }
+     ]
+}
+
+```
+
+Then we created a `yaml` config file for SQANTI3 with the appropriate paths and settings, which is used to run SQANTI3.
+
+An example of the yaml file:
+```{yaml example yaml}
+main:
+  refGTF: '/references/10X_CellRanger_refdata-gex-GRCh38-2020-A/genes/genes.gtf'
+  refFasta: '/references/10X_CellRanger_refdata-gex-GRCh38-2020-A/fasta/genome.fa'
+  cpus: 8
+  dir: ./sqanti3_default_adapted
+  output: isoforms
+  log_level: INFO
+qc:
+  enabled: true
+  options:
+    isoforms: './tama/merged.gtf'
+    min_ref_len: 0
+    force_id_ignore: false
+    fasta: false
+    genename: false
+    novel_gene_prefix: ''
+    sites: ATAC,GCAG,GTAG
+    window: 20
+    aligner_choice: minimap2
+    gmap_index: ''
+    skipORF: false
+    orf_input: ''
+    short_reads: ''
+    SR_bam: ''
+    CAGE_peak: ''
+    polyA_motif_list: ''
+    polyA_peak: ''
+    phyloP_bed: ''
+    expression: ''
+    coverage: ''
+    fl_count: ''
+    isoAnnotLite: false
+    gff3: ''
+    saturation: false
+    report: html
+    isoform_hits: false
+    ratio_TSS_metric: max
+    chunks: 1
+    is_fusion: false
+    tusco: ''
+filter:
+  enabled: true
+  options:
+    common:
+      sqanti_class: ./sqanti3_default_adapted/isoforms_classification.txt
+      isoAnnotGFF3: ''
+      filter_isoforms: ./sqanti3_default_adapted/isoforms_corrected.fasta
+      filter_gtf: ./sqanti3_default_adapted/isoforms_corrected.gtf
+      filter_sam: ''
+      filter_faa: ./sqanti3_default_adapted/isoforms_corrected.faa
+      skip_report: false
+      filter_mono_exonic: false
+    rules:
+      enabled: true
+      options:
+        json_filter: ./filter_default_adapted.json
+    ml:
+      enabled: false
+      options:
+        percent_training: 0.8
+        TP: ''
+        TN: ''
+        threshold: 0.7
+        force_fsm_in: false
+        intermediate_files: false
+        remove_columns: ''
+        max_class_size: 3000
+        intrapriming: 60
+rescue:
+  enabled: true
+  options:
+    common:
+      filter_class: ./sqanti3_default_adapted/isoforms_RulesFilter_result_classification.txt
+      rescue_isoforms: ./sqanti3_default_adapted/isoforms_corrected.fasta
+      rescue_gtf: ./sqanti3_default_adapted/isoforms.filtered.gtf
+      refClassif: './sqanti3_default_adapted/isoforms_classification.txt'
+      counts: ''
+      rescue_mono_exonic: all
+      mode: automatic
+      requant: false
+      random_forest: ''
+    rules:
+      enabled: true
+      options:
+        json_filter: ./filter_default_adapted.json
+    ml:
+      enabled: false
+      options:
+        random_forest: ''
+        threshold: 0.7
+```
+
+SQANTI3 is then run as follows:
+
+```{bash SQANTI3 filtering}
+sqanti3 all -c "config.yaml" \
+		-a isoforms="${gtf_file}" \
+		-a dir="${sqanti_dir}" \
+		-a refGTF="${ref_gtf}" \
+		-a refFasta="${ref_fasta}" \
+		-a output="merged" \
+		-a cpus="${SLURM_CPUS_PER_TASK}"
+```
+
+
 ```{r set up, warning = FALSE, message = FALSE}
 # Source setup file including all required packages and functions
 source("./functions/setup.R")
 ```
 
 
-### Load in data
-
-```{r load in data}
-# Load in transcripts
-combined_counts = fread("./data/combined_grouped_transcript_model_counts.tsv")
-cells_doublets = fread("./data/barcode_doublet.tsv")
-```
-
-### Filter out doublets
-
-First we filter out doublet cells that were manually identified
-
-```{r filter out doublets}
-# Restructure cell barcode in doublets
-cells_doublets[, timepoint := gsub(".*-", "", V1)]
-cells_doublets[, barcode := gsub("-.*", "", V1)]
-cells_doublets[, clean_barcode := paste0(timepoint, "_", barcode)]
-
-# Rename
-setnames(combined_counts, "#feature_id", "transcript_id")
-
-# Filter out doublets
-combined_counts_filtered = combined_counts[, !colnames(combined_counts) %in% cells_doublets[doublet_outlier == TRUE, clean_barcode], with = FALSE]
-```
-
-
-### Preprocess data
-
-We split the data per timepoint and get the sum of each transcript per timepoint.
-
-```{r preprocess data}
-# Split per timepoint
-counts_d0 = combined_counts[, c("transcript_id", grep("D0", colnames(combined_counts), value = TRUE)), with = FALSE]
-counts_q1 = combined_counts[, c("transcript_id", grep("Q1", colnames(combined_counts), value = TRUE)), with = FALSE]
-counts_q2 = combined_counts[, c("transcript_id", grep("Q2", colnames(combined_counts), value = TRUE)), with = FALSE]
-counts_q3 = combined_counts[, c("transcript_id", grep("Q3", colnames(combined_counts), value = TRUE)), with = FALSE]
-
-# Get sum of each transcript per timepoint
-counts_d0[, sum := rowSums(.SD), .SDcols = -1]
-counts_q1[, sum := rowSums(.SD), .SDcols = -1]
-counts_q2[, sum := rowSums(.SD), .SDcols = -1]
-counts_q3[, sum := rowSums(.SD), .SDcols = -1]
-
-# Get counts per transcript type per timepoint
-counts_d0[, type := ifelse(grepl("ENST", transcript_id), "known", gsub(".*\\.", "", transcript_id))]
-counts_q1[, type := ifelse(grepl("ENST", transcript_id), "known", gsub(".*\\.", "", transcript_id))]
-counts_q2[, type := ifelse(grepl("ENST", transcript_id), "known", gsub(".*\\.", "", transcript_id))]
-counts_q3[, type := ifelse(grepl("ENST", transcript_id), "known", gsub(".*\\.", "", transcript_id))]
-
-# Make new data.table
-dt = data.table(transcript_id = counts_d0$transcript_id,
-								D0 = counts_d0$sum,
-								Q1 = counts_q1$sum,
-								Q2 = counts_q2$sum,
-								Q3 = counts_q3$sum,
-								type = counts_d0$type)
-dt_m = melt(dt, id.vars = c("transcript_id", "type"), variable.name = "timepoint", value.name = "count")
-
-dt_m_aggr = dt_m[, .(count = sum(count)), by = c("type", "timepoint")]
-dt_m_aggr[, type := factor(type, levels = c("known", "nnic", "nic"))]
-```
-
-### Plot isoform quantification
-
-First we plot the total number of transcripts per type per timepoint.
-
-```{r plot isoform quantification total}
-# Plot
-ggplot(dt_m_aggr, aes(x = type, y = count, group = type, fill = timepoint)) +
-	geom_col(position = "dodge") +
-	facet_wrap(~timepoint, nrow = 1) +
-	scale_fill_manual(values = timepoints_cols) +
-	theme_cowplot() +
-	labs(y = "Number of transcripts", x = "") +
-	scale_y_continuous(expand = c(0, 0), labels = scales::comma_format()) +
-	theme(legend.position = "none",
-				text = element_text(family = "Helvetica"),
-				axis.text.x = element_text(angle = 45, hjust = 1))
-```
-
-Then we plot the number of unique transcripts per type per timepoint.
+Then we plot the number of isoforms detected after filtering.
+Since the numbers are saved in a pdf we did this manually
 
 ```{r plot isoform quantification unique}
-# Plot Number of unique transcripts
-dt_counts_unique_D0 = counts_d0[sum > 0, .N, by = type]
-dt_counts_unique_Q1 = counts_q1[sum > 0, .N, by = type]
-dt_counts_unique_Q2 = counts_q2[sum > 0, .N, by = type]
-dt_counts_unique_Q3 = counts_q3[sum > 0, .N, by = type]
-
-# Combine
-dt_counts_unique_D0[, timepoint := "D0"]
-dt_counts_unique_Q1[, timepoint := "Q1"]
-dt_counts_unique_Q2[, timepoint := "Q2"]
-dt_counts_unique_Q3[, timepoint := "Q3"]
-
-dt_counts_unique = rbind(dt_counts_unique_D0, dt_counts_unique_Q1, dt_counts_unique_Q2, dt_counts_unique_Q3)
-dt_counts_unique[, type := factor(type, levels = c("known", "nnic", "nic"))]
+dt = data.table(type = c("FSM", "ISM", "NIC", "NNC", "Genic", "Antisense", "Genic fusion", "Intergenic", "Genic intron"),
+				count = c(2262, 606, 75, 224, 42, 488, 2, 150, 263))
+dt[, type := factor(type, levels = c("FSM", "ISM", "NIC", "NNC", "Genic", "Antisense", "Genic fusion", "Intergenic", "Genic intron"))]
 
 # Plot
-ggplot(dt_counts_unique, aes(x = type, y = N, group = type, fill = timepoint)) +
+plt = ggplot(dt, aes(x = type, y = count, group = type, fill = type)) +
 	geom_col(position = "dodge") +
-	facet_wrap(~timepoint, nrow = 1) +
-	scale_fill_manual(values = timepoints_cols) +
+	scale_fill_brewer(palette = "Paired") +
 	theme_cowplot() +
 	labs(y = "Number of transcripts", x = "") +
 	scale_y_continuous(expand = c(0, 0), labels = scales::comma_format()) +

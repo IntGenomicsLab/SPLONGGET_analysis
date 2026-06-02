@@ -147,11 +147,11 @@ DNA_merged[is.na(alt_depth), alt_depth := 0]
 DNA_merged[is.na(timepoint), timepoint := gsub(".*-", "", barcode)]
 
 # Quantification
-cDNA_merged[, power := ifelse(total_depth >= 3, "yes", "no")]
+cDNA_merged[, power := ifelse(total_depth >= 2, "yes", "no")]
 DNA_merged[, power := ifelse(total_depth >= 2, "yes", "no")]
 
 # Add presence column
-cDNA_merged[, presence := ifelse(genotype %in% c("1/1", "0/1", "1/0") & alt_depth >= 3, "1", "0")]
+cDNA_merged[, presence := ifelse(genotype %in% c("1/1", "0/1", "1/0") & alt_depth >= 2, "1", "0")]
 DNA_merged[, presence := ifelse(genotype %in% c("1/1", "0/1", "1/0") & alt_depth >= 2, "1", "0")]
 
 # Get frequencies
