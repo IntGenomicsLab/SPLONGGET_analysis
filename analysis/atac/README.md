@@ -30,6 +30,7 @@
 - `atac/COLO/05_jaccard_similarity.ipynb` - compare IDR and DNAsee I <br>
 - `atac/COLO/DARs_bw.R` - plotting DARs in COLO <br>
 - `atac/COLO/kneeplot.ipynb` - kneeplot for COLO <br>
+- `atac/COLO/06_COLO_flagstat.sh` - bases coverage extraction <br>
 - `atac/COLO/06_bases_covered.ipynb` - bases covered plot <br>
 
 
